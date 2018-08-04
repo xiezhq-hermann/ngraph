@@ -14,7 +14,12 @@
 # limitations under the License.
 # ******************************************************************************
 
-cmake_minimum_required (VERSION 3.1)
+if(WIN32)
+	cmake_minimum_required (VERSION 3.4)
+	set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS TRUE)
+else()
+	cmake_minimum_required (VERSION 3.1)
+endif()
 
 include(cmake/Modules/git_tags.cmake)
 NGRAPH_GET_VERSION_LABEL()

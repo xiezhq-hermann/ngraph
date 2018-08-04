@@ -83,7 +83,7 @@ namespace ngraph
                         auto mean_diff = arg2[arg2_transform.index(arg2_coord)] - channel_mean;
                         channel_diff_square_sum += mean_diff * mean_diff;
                     }
-                    T channel_var = channel_diff_square_sum / (shape_size(arg2_shape) / channels);
+                    T channel_var = static_cast<T>(channel_diff_square_sum / (shape_size(arg2_shape) / channels));
                     out2[c] = channel_var;
 
                     // Compute the normalized output
