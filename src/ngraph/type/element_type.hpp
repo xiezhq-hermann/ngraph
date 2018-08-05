@@ -27,23 +27,29 @@
 
 #include "ngraph/except.hpp"
 
+#ifdef WIN32
+#define IMPORT __declspec(dllimport)
+#else
+#define IMPORT
+#endif
+
 namespace ngraph
 {
     namespace element
     {
         class Type;
 
-        extern const Type boolean;
-        extern const Type f32;
-        extern const Type f64;
-        extern const Type i8;
-        extern const Type i16;
-        extern const Type i32;
-        extern const Type i64;
-        extern const Type u8;
-        extern const Type u16;
-        extern const Type u32;
-        extern const Type u64;
+        extern IMPORT const Type boolean;
+        extern IMPORT const Type f32;
+        extern IMPORT const Type f64;
+        extern IMPORT const Type i8;
+        extern IMPORT const Type i16;
+        extern IMPORT const Type i32;
+        extern IMPORT const Type i64;
+        extern IMPORT const Type u8;
+        extern IMPORT const Type u16;
+        extern IMPORT const Type u32;
+        extern IMPORT const Type u64;
 
         class Type
         {

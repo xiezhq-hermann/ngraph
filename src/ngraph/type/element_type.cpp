@@ -20,17 +20,23 @@
 
 using namespace ngraph;
 
-const element::Type element::boolean(8, false, true, "char");
-const element::Type element::f32(32, true, true, "float");
-const element::Type element::f64(64, true, true, "double");
-const element::Type element::i8(8, false, true, "int8_t");
-const element::Type element::i16(16, false, true, "int16_t");
-const element::Type element::i32(32, false, true, "int32_t");
-const element::Type element::i64(64, false, true, "int64_t");
-const element::Type element::u8(8, false, false, "uint8_t");
-const element::Type element::u16(16, false, false, "uint16_t");
-const element::Type element::u32(32, false, false, "uint32_t");
-const element::Type element::u64(64, false, false, "uint64_t");
+#ifdef WIN32
+#define EXPORT __declspec(dllexport)
+#else
+#define EXPORT
+#endif
+
+extern EXPORT const element::Type element::boolean(8, false, true, "char");
+extern EXPORT const element::Type element::f32(32, true, true, "float");
+extern EXPORT const element::Type element::f64(64, true, true, "double");
+extern EXPORT const element::Type element::i8(8, false, true, "int8_t");
+extern EXPORT const element::Type element::i16(16, false, true, "int16_t");
+extern EXPORT const element::Type element::i32(32, false, true, "int32_t");
+extern EXPORT const element::Type element::i64(64, false, true, "int64_t");
+extern EXPORT const element::Type element::u8(8, false, false, "uint8_t");
+extern EXPORT const element::Type element::u16(16, false, false, "uint16_t");
+extern EXPORT const element::Type element::u32(32, false, false, "uint32_t");
+extern EXPORT const element::Type element::u64(64, false, false, "uint64_t");
 
 std::vector<const element::Type*> element::Type::get_known_types()
 {
