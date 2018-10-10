@@ -83,17 +83,9 @@ the graph, and in the case of Resnet, sends the entire graph to nGraph for
 compilation. This produces a single call to an NNVM ``NGraphSubgraphOp`` embedded 
 with the compiled model. At this point, we can test the model's performance.
 
-  ::
-
-   dry_run = 5
-   num_batches = 100
-   for i in range(dry_run + num_batches):
-       if i == dry_run:
-           start_time = time.time()
-       outputs = model.forward(data=input_data, is_train=False)
-       for output in outputs:
-           output.wait_to_read()
-   print("Average Latency = ", (time.time() - start_time)/num_batches * 1000, "ms")
+.. literalinclude:: ../../../examples/subgraph_snippets/mxnet-gluon-example.py
+   :language: python
+   :lines: 40-48
 
 
 .. _merged as an experimental backend: https://github.com/apache/incubator-mxnet/pull/12502
