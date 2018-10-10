@@ -37,12 +37,12 @@ model.copy_params_from(arg_params, aux_params)
 # To test the model's performance, we've provided this helpful code snippet
 # customizable 
 
-   dry_run = 5
-   num_batches = 100
-   for i in range(dry_run + num_batches):
-       if i == dry_run:
-           start_time = time.time()
-       outputs = model.forward(data=input_data, is_train=False)
-       for output in outputs:
-           output.wait_to_read()
-   print("Average Latency = ", (time.time() - start_time)/num_batches * 1000, "ms")
+dry_run = 5
+num_batches = 100
+for i in range(dry_run + num_batches):
+   if i == dry_run:
+       start_time = time.time()
+   outputs = model.forward(data=input_data, is_train=False)
+   for output in outputs:
+       output.wait_to_read()
+print("Average Latency = ", (time.time() - start_time)/num_batches * 1000, "ms")
