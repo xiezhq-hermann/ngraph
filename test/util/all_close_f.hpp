@@ -46,7 +46,7 @@ namespace ngraph
         ///
         /// This function uses hard-coded value of 8 bit exponent_bits, so it's only valid for
         /// bfloat and f32.
-        bool close_f(float a, float b, int mantissa_bits = 8, int tolerance_bits = 2);
+        bool close_f(float a, float b, int mantissa_bits = 24, int tolerance_bits = 4);
 
         /// \brief Check if the two floating point vectors are all close
         /// \param a First number to compare

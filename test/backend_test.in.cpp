@@ -4219,7 +4219,7 @@ NGRAPH_TEST(${BACKEND_NAME}, power)
     auto result = backend->create_tensor(element::f32, shape);
 
     backend->call_with_validate(f, {result}, {a, b});
-    EXPECT_TRUE(test::all_close(vector<float>{1, 1, 729, 125}, read_vector<float>(result)));
+    EXPECT_TRUE(test::all_close_f(vector<float>{1, 1, 729, 125}, read_vector<float>(result)));
 }
 
 NGRAPH_TEST(${BACKEND_NAME}, constant_equality_bool)
@@ -5287,7 +5287,7 @@ NGRAPH_TEST(${BACKEND_NAME}, max_pool_2d_1channel_1image_overpadded)
 
     backend->call_with_validate(f, {result}, {a});
     auto min = std::numeric_limits<float>::lowest();
-    EXPECT_TRUE(test::all_close(test::NDArray<float, 4>({{{{min, min, min, min, min},
+    EXPECT_TRUE(test::all_close_f(test::NDArray<float, 4>({{{{min, min, min, min, min},
                                                            {1, 2, 2, 2, 1},
                                                            {3, 3, 2, 2, 1},
                                                            {3, 3, 2, 1, 1},
@@ -5433,7 +5433,7 @@ NGRAPH_TEST(${BACKEND_NAME}, max_pool_3d)
     auto cpu_results = execute(cpu_f, args, "${BACKEND_NAME}");
     for (size_t i = 0; i < cpu_results.size(); i++)
     {
-        EXPECT_TRUE(test::all_close(cpu_results.at(i), int_results.at(i), 1.0e-4f, 1.0e-4f));
+        EXPECT_TRUE(test::all_close_f(cpu_results.at(i), int_results.at(i)));
     }
 }
 
@@ -6911,7 +6911,7 @@ NGRAPH_TEST(${BACKEND_NAME}, avg_pool_2d_1channel_1image_padded_do_not_include_i
 
     backend->call_with_validate(f, {result}, {a});
     EXPECT_TRUE(
-        test::all_close(test::NDArray<float, 4>({{{{0.0f / 1, 1.0f / 2, 1.0f / 2, 0.0f / 1},
+        test::all_close_f(test::NDArray<float, 4>({{{{0.0f / 1, 1.0f / 2, 1.0f / 2, 0.0f / 1},
                                                    {0.0f / 2, 4.0f / 4, 6.0f / 4, 2.0f / 2},
                                                    {2.0f / 2, 5.0f / 4, 5.0f / 4, 2.0f / 2},
                                                    {2.0f / 1, 2.0f / 2, 0.0f / 2, 0.0f / 1}}}})
@@ -6942,7 +6942,7 @@ NGRAPH_TEST(${BACKEND_NAME}, avg_pool_2d_1channel_1image_padded_include_in_compu
 
     backend->call_with_validate(f, {result}, {a});
     EXPECT_TRUE(
-        test::all_close(test::NDArray<float, 4>({{{{0.0f / 4, 1.0f / 4, 1.0f / 4, 0.0f / 4},
+        test::all_close_f(test::NDArray<float, 4>({{{{0.0f / 4, 1.0f / 4, 1.0f / 4, 0.0f / 4},
                                                    {0.0f / 4, 4.0f / 4, 6.0f / 4, 2.0f / 4},
                                                    {2.0f / 4, 5.0f / 4, 5.0f / 4, 2.0f / 4},
                                                    {2.0f / 4, 2.0f / 4, 0.0f / 4, 0.0f / 4}}}})
@@ -6976,7 +6976,7 @@ NGRAPH_TEST(${BACKEND_NAME}, avg_pool_2d_2channel_2image_padded_do_not_include_i
 
     backend->call_with_validate(f, {result}, {a});
     EXPECT_TRUE(
-        test::all_close(test::NDArray<float, 4>({{{{0.0f / 1, 1.0f / 2, 1.0f / 2, 0.0f / 1},
+        test::all_close_f(test::NDArray<float, 4>({{{{0.0f / 1, 1.0f / 2, 1.0f / 2, 0.0f / 1},
                                                    {0.0f / 2, 4.0f / 4, 6.0f / 4, 2.0f / 2},
                                                    {2.0f / 2, 5.0f / 4, 5.0f / 4, 2.0f / 2},
                                                    {2.0f / 1, 2.0f / 2, 0.0f / 2, 0.0f / 1}},
@@ -7014,7 +7014,7 @@ NGRAPH_TEST(${BACKEND_NAME}, avg_pool_2d_2channel_2image_padded_include_in_compu
 
     backend->call_with_validate(f, {result}, {a});
     EXPECT_TRUE(
-        test::all_close(test::NDArray<float, 4>({{{{0.0f / 4, 1.0f / 4, 1.0f / 4, 0.0f / 4},
+        test::all_close_f(test::NDArray<float, 4>({{{{0.0f / 4, 1.0f / 4, 1.0f / 4, 0.0f / 4},
                                                    {0.0f / 4, 4.0f / 4, 6.0f / 4, 2.0f / 4},
                                                    {2.0f / 4, 5.0f / 4, 5.0f / 4, 2.0f / 4},
                                                    {2.0f / 4, 2.0f / 4, 0.0f / 4, 0.0f / 4}},
@@ -7052,7 +7052,7 @@ NGRAPH_TEST(${BACKEND_NAME},
     auto result = backend->create_tensor(element::f32, shape_r);
 
     backend->call_with_validate(f, {result}, {a});
-    EXPECT_TRUE(test::all_close(test::NDArray<float, 4>({{{{0.0f / 1, 1.0f / 2, 1.0f / 2},
+    EXPECT_TRUE(test::all_close_f(test::NDArray<float, 4>({{{{0.0f / 1, 1.0f / 2, 1.0f / 2},
                                                            {0.0f / 2, 4.0f / 4, 6.0f / 4},
                                                            {2.0f / 2, 5.0f / 4, 5.0f / 4}},
                                                           {{3.0f / 1, 8.0f / 2, 7.0f / 2},
@@ -7087,7 +7087,7 @@ NGRAPH_TEST(${BACKEND_NAME}, avg_pool_2d_2channel_2image_padded_only_below_inclu
     auto result = backend->create_tensor(element::f32, shape_r);
 
     backend->call_with_validate(f, {result}, {a});
-    EXPECT_TRUE(test::all_close(test::NDArray<float, 4>({{{{0.0f / 4, 1.0f / 4, 1.0f / 4},
+    EXPECT_TRUE(test::all_close_f(test::NDArray<float, 4>({{{{0.0f / 4, 1.0f / 4, 1.0f / 4},
                                                            {0.0f / 4, 4.0f / 4, 6.0f / 4},
                                                            {2.0f / 4, 5.0f / 4, 5.0f / 4}},
                                                           {{3.0f / 4, 8.0f / 4, 7.0f / 4},
@@ -7123,7 +7123,7 @@ NGRAPH_TEST(${BACKEND_NAME},
     auto result = backend->create_tensor(element::f32, shape_r);
 
     backend->call_with_validate(f, {result}, {a});
-    EXPECT_TRUE(test::all_close(test::NDArray<float, 4>({{{{4.0f / 4, 6.0f / 4, 2.0f / 2},
+    EXPECT_TRUE(test::all_close_f(test::NDArray<float, 4>({{{{4.0f / 4, 6.0f / 4, 2.0f / 2},
                                                            {5.0f / 4, 5.0f / 4, 2.0f / 2},
                                                            {2.0f / 2, 0.0f / 2, 0.0f / 1}},
                                                           {{10.0f / 4, 16.0f / 4, 11.0f / 2},
@@ -7158,7 +7158,7 @@ NGRAPH_TEST(${BACKEND_NAME}, avg_pool_2d_2channel_2image_padded_only_above_inclu
     auto result = backend->create_tensor(element::f32, shape_r);
 
     backend->call_with_validate(f, {result}, {a});
-    EXPECT_TRUE(test::all_close(test::NDArray<float, 4>({{{{4.0f / 4, 6.0f / 4, 2.0f / 4},
+    EXPECT_TRUE(test::all_close_f(test::NDArray<float, 4>({{{{4.0f / 4, 6.0f / 4, 2.0f / 4},
                                                            {5.0f / 4, 5.0f / 4, 2.0f / 4},
                                                            {2.0f / 4, 0.0f / 4, 0.0f / 4}},
                                                           {{10.0f / 4, 16.0f / 4, 11.0f / 4},
@@ -7418,7 +7418,7 @@ NGRAPH_TEST(${BACKEND_NAME}, avg_pool_3d_strided_uneven_padded_do_not_include_in
     auto backend_results = execute(cpu_f, args, "${BACKEND_NAME}");
     for (size_t i = 0; i < backend_results.size(); i++)
     {
-        EXPECT_TRUE(test::all_close(backend_results.at(i), int_results.at(i), 1.0e-4f, 1.0e-4f));
+        EXPECT_TRUE(test::all_close_f(backend_results.at(i), int_results.at(i)));
     }
 }
 
@@ -7451,7 +7451,7 @@ NGRAPH_TEST(${BACKEND_NAME}, avg_pool_3d_uneven_strided_padded_include_in_comput
     auto backend_results = execute(cpu_f, args, "${BACKEND_NAME}");
     for (size_t i = 0; i < backend_results.size(); i++)
     {
-        EXPECT_TRUE(test::all_close(backend_results.at(i), int_results.at(i), 1.0e-4f, 1.0e-4f));
+        EXPECT_TRUE(test::all_close_f(backend_results.at(i), int_results.at(i)));
     }
 }
 
@@ -8151,7 +8151,7 @@ NGRAPH_TEST(${BACKEND_NAME}, product_3d_to_scalar)
     auto result = backend->create_tensor(element::f32, shape_rt);
 
     backend->call_with_validate(f, {result}, {a});
-    EXPECT_TRUE(test::all_close(vector<float>{1.0f * 10.0f * 9.0f * 4.0f * 13.0f * 6.0f * 7.0f *
+    EXPECT_TRUE(test::all_close_f(vector<float>{1.0f * 10.0f * 9.0f * 4.0f * 13.0f * 6.0f * 7.0f *
                                               12.0f * 3.0f * 2.0f * 11.0f * 8.0f * 5.0f * 14.0f *
                                               5.0f * 8.0f * 11.0f * 2.0f * 3.0f * 12.0f * 7.0f *
                                               6.0f * 13.0f * 4.0f * 9.0f * 10.0f * 1.0f},
@@ -8841,7 +8841,7 @@ NGRAPH_TEST(${BACKEND_NAME}, sigmoid_bprop_n1c1h4)
     backend->call_with_validate(func, {result}, {a, b});
 
     vector<float> expected{0.196612f, 0.0176627f, 0.196612f, 0.0176627f};
-    EXPECT_TRUE(test::all_close(expected, read_vector<float>(result)));
+    EXPECT_TRUE(test::all_close_f(expected, read_vector<float>(result)));
 }
 
 NGRAPH_TEST(${BACKEND_NAME}, relu_2Dfprop)
@@ -9007,7 +9007,7 @@ NGRAPH_TEST(${BACKEND_NAME}, softmax_axis_3d)
                            expf(-5) / d4,
                            expf(-6) / d5};
 
-    EXPECT_TRUE(test::all_close(expected, read_vector<float>(result)));
+    EXPECT_TRUE(test::all_close_f(expected, read_vector<float>(result)));
 }
 
 NGRAPH_TEST(${BACKEND_NAME}, softmax_axis)
@@ -9058,7 +9058,7 @@ NGRAPH_TEST(${BACKEND_NAME}, softmax_axis_2)
                            expf(-40) / d0,
                            expf(-50) / d1,
                            expf(-60) / d2};
-    EXPECT_TRUE(test::all_close(expected, read_vector<float>(result)));
+    EXPECT_TRUE(test::all_close_f(expected, read_vector<float>(result)));
 }
 
 NGRAPH_TEST(${BACKEND_NAME}, softmax_axis_3d_trivial)
@@ -9075,7 +9075,7 @@ NGRAPH_TEST(${BACKEND_NAME}, softmax_axis_3d_trivial)
 
     backend->call_with_validate(f, {result}, {a});
     vector<float> expected{1, 1, 1, 1, 1, 1};
-    EXPECT_TRUE(test::all_close(expected, read_vector<float>(result)));
+    EXPECT_TRUE(test::all_close_f(expected, read_vector<float>(result)));
 }
 
 NGRAPH_TEST(${BACKEND_NAME}, softmax_underflow)
@@ -9099,7 +9099,7 @@ NGRAPH_TEST(${BACKEND_NAME}, softmax_underflow)
     backend->call_with_validate(f, {result}, {a});
     vector<float> expected{
         expf(low) / d0, expf(1) / d1, expf(2) / d2, expf(3) / d0, expf(4) / d1, expf(5) / d2};
-    EXPECT_TRUE(test::all_close(expected, read_vector<float>(result)));
+    EXPECT_TRUE(test::all_close_f(expected, read_vector<float>(result)));
 }
 
 NGRAPH_TEST(${BACKEND_NAME}, multiple_backends)
@@ -9372,10 +9372,10 @@ NGRAPH_TEST(${BACKEND_NAME}, batchnorm_fprop_b1c2h2w2)
     backend->call_with_validate(
         f, {bn_output, result_mean, result_variance}, {_input, _gamma, _beta});
 
-    EXPECT_TRUE(test::all_close(expected_result, read_vector<float>(bn_output), 1e-5f, 1e-6f));
-    EXPECT_TRUE(test::all_close(expected_mean, read_vector<float>(result_mean), 1e-5f, 1e-6f));
+    EXPECT_TRUE(test::all_close_f(expected_result, read_vector<float>(bn_output)));
+    EXPECT_TRUE(test::all_close_f(expected_mean, read_vector<float>(result_mean)));
     EXPECT_TRUE(
-        test::all_close(expected_variance, read_vector<float>(result_variance), 1e-5f, 1e-6f));
+        test::all_close_f(expected_variance, read_vector<float>(result_variance)));
 }
 
 NGRAPH_TEST(${BACKEND_NAME}, batchnorm_fprop_b2c2h2w1)
@@ -9426,10 +9426,10 @@ NGRAPH_TEST(${BACKEND_NAME}, batchnorm_fprop_b2c2h2w1)
     backend->call_with_validate(
         f, {bn_output, result_mean, result_variance}, {_input, _gamma, _beta});
 
-    EXPECT_TRUE(test::all_close(expected_result, read_vector<float>(bn_output)));
-    EXPECT_TRUE(test::all_close(expected_mean, read_vector<float>(result_mean)));
+    EXPECT_TRUE(test::all_close_f(expected_result, read_vector<float>(bn_output)));
+    EXPECT_TRUE(test::all_close_f(expected_mean, read_vector<float>(result_mean)));
     EXPECT_TRUE(
-        test::all_close(expected_variance, read_vector<float>(result_variance), 1e-5f, 1e-6f));
+        test::all_close_f(expected_variance, read_vector<float>(result_variance)));
 }
 
 NGRAPH_TEST(${BACKEND_NAME}, batchnorm_bprop_n4c3h2w2)
@@ -9520,12 +9520,12 @@ NGRAPH_TEST(${BACKEND_NAME}, batchnorm_bprop_n4c3h2w2)
         3.83005061e-06f,  5.85143729e-06f,  4.17875243e-06f,  -8.64167783e-06f, 1.00170803e-05f,
         -4.23939666e-06f, 4.80201680e-06f,  4.62702078e-06f};
 
-    ASSERT_TRUE(ngraph::test::all_close(read_vector<float>(_dinput), expected_input, 1e-3f, 1e-4f));
+    ASSERT_TRUE(ngraph::test::all_close_f(read_vector<float>(_dinput), expected_input));
     vector<float> expected_dgamma{7.06315041e-05f, -2.35289335e-04f, -5.06639481e-05f};
     ASSERT_TRUE(
-        ngraph::test::all_close(read_vector<float>(_dgamma), expected_dgamma, 1e-2f, 1e-3f));
+        ngraph::test::all_close_f(read_vector<float>(_dgamma), expected_dgamma));
     vector<float> expected_dbeta{320.f, 320.f, 320.f};
-    ASSERT_TRUE(ngraph::test::all_close(read_vector<float>(_dbeta), expected_dbeta, 1e-4f, 1e-8f));
+    ASSERT_TRUE(ngraph::test::all_close_f(read_vector<float>(_dbeta), expected_dbeta));
 }
 
 NGRAPH_TEST(${BACKEND_NAME}, batchnorm_fprop_inference_b2c2h2w1)
@@ -9574,7 +9574,7 @@ NGRAPH_TEST(${BACKEND_NAME}, batchnorm_fprop_inference_b2c2h2w1)
     backend->call_with_validate(f, {bn_output}, {_input, _gamma, _beta, _mean, _var});
 
     ASSERT_TRUE(
-        ngraph::test::all_close(expected_result, read_vector<float>(bn_output), 1e-3f, 1e-4f));
+        ngraph::test::all_close_f(expected_result, read_vector<float>(bn_output)));
 }
 
 NGRAPH_TEST(${BACKEND_NAME}, batchnorm_fprop_globalstats_b2c2w2h1)
@@ -9623,7 +9623,7 @@ NGRAPH_TEST(${BACKEND_NAME}, batchnorm_fprop_globalstats_b2c2w2h1)
     backend->call_with_validate(f, {bn_output}, {_gamma, _beta, _input, _mean, _var});
 
     ASSERT_TRUE(
-        ngraph::test::all_close(expected_result, read_vector<float>(bn_output), 1e-3f, 1e-4f));
+        ngraph::test::all_close_f(expected_result, read_vector<float>(bn_output)));
 }
 
 NGRAPH_TEST(${BACKEND_NAME}, reverse_sequence_n2c3h4w2)
