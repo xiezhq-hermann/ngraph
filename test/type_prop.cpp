@@ -1,24 +1,22 @@
-/*******************************************************************************
-* Copyright 2017-2018 Intel Corporation
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*     http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*******************************************************************************/
+//*****************************************************************************
+// Copyright 2017-2018 Intel Corporation
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//*****************************************************************************
 
 #include "gtest/gtest.h"
 
 #include "ngraph/ngraph.hpp"
-#include "ngraph/op/batch_norm.hpp"
-#include "ngraph/op/reverse_sequence.hpp"
 
 #include <memory>
 using namespace std;
@@ -40,28 +38,6 @@ TEST(type_prop, broadcast_deduce)
     ASSERT_EQ(bc->get_shape(), bc_shape);
 }
 
-TEST(type_prop, broadcast_deduce_incorrect)
-{
-    // Check deduced type against incorrectly specified type
-    auto param = make_shared<op::Parameter>(element::f32, Shape{2, 4});
-    try
-    {
-        auto bc = make_shared<op::Broadcast>(param, Shape{2, 4, 3}, AxisSet{1});
-        bc->set_value_type_checked(element::f32, Shape{2, 3, 4});
-
-        // Should have thrown, so fail if it didn't
-        FAIL() << "Deduced type should disagree with specified type";
-    }
-    catch (const ngraph_error& error)
-    {
-        EXPECT_EQ(error.what(), std::string("Broadcast arg, shape, and axes are incompatible"));
-    }
-    catch (...)
-    {
-        FAIL() << "Deduced type check failed for unexpected reason";
-    }
-}
-
 TEST(type_prop, batchnorm_rank_less_than_2)
 {
     auto dummy = make_shared<op::Parameter>(element::f32, Shape{1});
@@ -70,10 +46,10 @@ TEST(type_prop, batchnorm_rank_less_than_2)
         auto bc = make_shared<op::BatchNorm>(0.001, dummy, dummy, dummy);
         FAIL() << "BatchNorm c-tor should throw for tensors whose rank is less than 2";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(),
-                  std::string("input tensor to batchnorm must have tensor of at least rank 2"));
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             std::string("Input argument must have rank of at least 2"));
     }
     catch (...)
     {
@@ -89,11 +65,11 @@ TEST(type_prop, batchnorm_zero_channel_check)
         auto bc = make_shared<op::BatchNorm>(0.001, dummy, dummy, dummy);
         FAIL() << "BatchNorm c-tor should throw for tensors w/ zero-dimension channels";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(),
-                  std::string(
-                      "input tensor must have at least one channel axis for batch normalization"));
+        EXPECT_HAS_SUBSTRING(
+            error.what(),
+            std::string("Input argument's channel dimension must have size of at least 1"));
     }
     catch (...)
     {
@@ -112,10 +88,11 @@ TEST(type_prop, batchnorm_et_check)
         auto bc = make_shared<op::BatchNorm>(0.001, dummy_f32, dummy_f64, param);
         FAIL() << "BatchNorm c-tor should throw for different element types";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(),
-                  std::string("The element type of beta isn't equal to input data's type"));
+        EXPECT_HAS_SUBSTRING(error.what(), std::string("Element type of beta"));
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             std::string("is not equal to the element type of input"));
     }
     catch (...)
     {
@@ -134,10 +111,11 @@ TEST(type_prop, batchnorm_shape_check)
         auto bc = make_shared<op::BatchNorm>(0.001, dummy_4, dummy_3, param);
         FAIL() << "BatchNorm c-tor should throw if gamma and beta shapes don't match";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(),
-                  std::string("The shape of gamma isn't equal to input channel's shape"));
+        EXPECT_HAS_SUBSTRING(
+            error.what(),
+            std::string("Shape of gamma must match the channel dimension of the input data"));
     }
     catch (...)
     {
@@ -156,9 +134,9 @@ TEST(type_prop, batchnorm_backprop_4d_check)
             make_shared<op::BatchNormBackprop>(0.001, dummy, dummy, param, dummy, dummy, dummy);
         FAIL() << "Deduced type should disagree with c-tor arguments";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(), std::string("Input expected to be a 4D tensor"));
+        EXPECT_HAS_SUBSTRING(error.what(), std::string("Input data shape is not a 4D tensor"));
     }
     catch (...)
     {
@@ -178,10 +156,11 @@ TEST(type_prop, batchnorm_backprop_et_check)
             0.001, dummy_f32, dummy_f64, param, dummy_f32, dummy_f32, dummy_f32);
         FAIL() << "Deduced type should disagree with c-tor arguments";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(),
-                  std::string("The element type of beta isn't equal to input data's type"));
+        EXPECT_HAS_SUBSTRING(error.what(), std::string("Element type of beta"));
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             std::string("is not equal to the element type of input"));
     }
     catch (...)
     {
@@ -201,10 +180,11 @@ TEST(type_prop, batchnorm_backprop_shape_check)
             make_shared<op::BatchNormBackprop>(0.001, dummy, dummy2, param, dummy2, dummy2, dummy2);
         FAIL() << "Deduced type should disagree with c-tor arguments";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(),
-                  std::string("The shape of beta isn't equal to input channel's shape"));
+        EXPECT_HAS_SUBSTRING(
+            error.what(),
+            std::string("Shape of beta must match the channel dimension of the input data"));
     }
     catch (...)
     {
@@ -225,9 +205,10 @@ TEST(type_prop, batchnorm_backprop_delta_check)
             make_shared<op::BatchNormBackprop>(0.001, dummy, dummy, param, dummy, dummy, delta);
         FAIL() << "Deduced type should disagree with c-tor arguments";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(), std::string("delta shape is expected to be equal to input shape"));
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             std::string("Shape of delta must match the shape of the input data"));
     }
     catch (...)
     {
@@ -246,29 +227,6 @@ TEST(type_prop, concat_deduce)
     ASSERT_EQ(c->get_shape(), (Shape{2, 12, 4}));
 }
 
-TEST(type_prop, concat_deduce_incorrect)
-{
-    // Check deduced type against incorrectly specified type
-    auto param0 = make_shared<op::Parameter>(element::f32, Shape{2, 3, 4});
-    auto param1 = make_shared<op::Parameter>(element::f32, Shape{2, 7, 4});
-    auto param2 = make_shared<op::Parameter>(element::f32, Shape{2, 2, 4});
-    try
-    {
-        auto c = make_shared<op::Concat>(NodeVector{param0, param1, param2}, 1);
-        c->set_value_type_checked(element::f32, (Shape{2, 14, 4}));
-        // Should have thrown, so fail if it didn't
-        FAIL() << "Deduced type should disagree with specified type";
-    }
-    catch (const ngraph_error& error)
-    {
-        EXPECT_EQ(error.what(), std::string("Setting value type to a different ValueType"));
-    }
-    catch (...)
-    {
-        FAIL() << "Deduced type check failed for unexpected reason";
-    }
-}
-
 TEST(type_prop, concat_deduce_wrong_rank)
 {
     auto param0 = make_shared<op::Parameter>(element::f32, Shape{2, 3, 4});
@@ -283,9 +241,9 @@ TEST(type_prop, concat_deduce_wrong_rank)
         // Should have thrown, so fail if it didn't
         FAIL() << "Deduced type should disagree with specified type";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(), std::string("Arguments to concat do not have same rank"));
+        EXPECT_HAS_SUBSTRING(error.what(), std::string("Not all arguments have the same rank"));
     }
     catch (...)
     {
@@ -304,12 +262,10 @@ TEST(type_prop, concat_deduce_wrong_shape)
         // Should have thrown, so fail if it didn't
         FAIL() << "Deduced type should disagree with specified type";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(
-            error.what(),
-            std::string(
-                "Arguments to concat do not have same dimension on a non-concatenation axis"));
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             std::string("Dimensions of argument 2 do not match for axis 2"));
     }
     catch (...)
     {
@@ -328,9 +284,11 @@ TEST(type_prop, concat_deduce_axis_oob)
         // Should have thrown, so fail if it didn't
         FAIL() << "Deduced type should disagree with specified type";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(), std::string("Concatenation axis is out of bounds"));
+        EXPECT_HAS_SUBSTRING(
+            error.what(),
+            std::string("Concatenation axis (3) is out of bounds (inputs have rank 3)"));
     }
     catch (...)
     {
@@ -360,9 +318,10 @@ TEST(type_prop, concat_deduce_elem_type_mismatch)
         // Should have thrown, so fail if it didn't
         FAIL() << "Deduced type should disagree with specified type";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(), std::string("Argument element types do not match"));
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             std::string("Not all arguments have the same element type"));
     }
     catch (...)
     {
@@ -377,27 +336,6 @@ TEST(type_prop, convert_deduce)
     auto c = make_shared<op::Convert>(param, element::i32);
     ASSERT_EQ(c->get_element_type(), element::i32);
     ASSERT_EQ(c->get_shape(), (Shape{2, 3, 4}));
-}
-
-TEST(type_prop, convert_deduce_incorrect)
-{
-    // Check deduced type against incorrectly specified type
-    auto param = make_shared<op::Parameter>(element::f32, Shape{2, 3, 4});
-    try
-    {
-        auto c = make_shared<op::Convert>(param, element::i32);
-        c->set_value_type_checked(element::i32, Shape{2, 14, 4});
-        // Should have thrown, so fail if it didn't
-        FAIL() << "Deduced type should disagree with specified type";
-    }
-    catch (const ngraph_error& error)
-    {
-        EXPECT_EQ(error.what(), std::string("Setting value type to a different ValueType"));
-    }
-    catch (...)
-    {
-        FAIL() << "Deduced type check failed for unexpected reason";
-    }
 }
 
 TEST(type_prop, dot_deduce_scalar_2d)
@@ -481,9 +419,10 @@ TEST(type_prop, dot_deduce_element_type_mismatch)
         // Should have thrown, so fail if it didn't
         FAIL() << "Element type mismatch not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(), std::string("Arguments to dot must have the same element type"));
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             std::string("Arguments do not have the same element type"));
     }
     catch (...)
     {
@@ -502,9 +441,12 @@ TEST(type_prop, dot_deduce_reduction_axes_size_mismatch)
         // Should have thrown, so fail if it didn't
         FAIL() << "Dot reduction axes size mismatch not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(), std::string("Dot axes do not have same length"));
+        EXPECT_HAS_SUBSTRING(
+            error.what(),
+            std::string(
+                "Paired axes (axis 1 from arg0, axis 0 from arg1) do not have same length"));
     }
     catch (...)
     {
@@ -532,9 +474,9 @@ void test_binary(std::string node_type,
             // Should have thrown, so fail if it didn't
             FAIL() << "Incompatible view arguments not detected.";
         }
-        catch (const ngraph_error& error)
+        catch (const NodeValidationError& error)
         {
-            EXPECT_EQ(error.what(), std::string("Arguments must have the same tensor view shape"));
+            EXPECT_HAS_SUBSTRING(error.what(), std::string("Argument shapes are inconsistent"));
         }
         catch (...)
         {
@@ -551,10 +493,10 @@ void test_binary(std::string node_type,
             // Should have thrown, so fail if it didn't
             FAIL() << "Incompatible view arguments not detected.";
         }
-        catch (const ngraph_error& error)
+        catch (const NodeValidationError& error)
         {
-            EXPECT_EQ(error.what(),
-                      std::string("Arguments must have the same tensor view element type"));
+            EXPECT_HAS_SUBSTRING(error.what(),
+                                 std::string("Argument element types are inconsistent"));
         }
         catch (...)
         {
@@ -624,9 +566,9 @@ void test_binary_logical(std::string node_type,
             // Should have thrown, so fail if it didn't
             FAIL() << "Incompatible view arguments not detected.";
         }
-        catch (const ngraph_error& error)
+        catch (const NodeValidationError& error)
         {
-            EXPECT_EQ(error.what(), std::string("Arguments must have the same tensor view shape"));
+            EXPECT_HAS_SUBSTRING(error.what(), std::string("Argument shapes are inconsistent"));
         }
         catch (...)
         {
@@ -635,8 +577,27 @@ void test_binary_logical(std::string node_type,
     };
     test_binary_bad_arguments_view_shapes(tv0_2_4_param_0, tv0_4_2_param);
 
-    auto test_binary_bad_arguments_view_element_types = [&](const shared_ptr<Node>& x,
-                                                            const shared_ptr<Node>& y) {
+    auto test_binary_differ_arguments_view_element_types = [&](const shared_ptr<Node>& x,
+                                                               const shared_ptr<Node>& y) {
+        try
+        {
+            auto node = f(x, y);
+            // Should have thrown, so fail if it didn't
+            FAIL() << "Incompatible view arguments not detected.";
+        }
+        catch (const NodeValidationError& error)
+        {
+            EXPECT_HAS_SUBSTRING(error.what(),
+                                 std::string("Argument element types are inconsistent"));
+        }
+        catch (...)
+        {
+            FAIL() << "Deduced type check failed for unexpected reason";
+        }
+    };
+
+    auto test_binary_non_bool_arguments_view_element_types = [&](const shared_ptr<Node>& x,
+                                                                 const shared_ptr<Node>& y) {
         try
         {
             auto node = f(x, y);
@@ -645,17 +606,18 @@ void test_binary_logical(std::string node_type,
         }
         catch (const ngraph_error& error)
         {
-            EXPECT_EQ(error.what(), std::string("Arguments must have boolean element type"));
+            EXPECT_HAS_SUBSTRING(error.what(), "must have boolean element type");
         }
         catch (...)
         {
             FAIL() << "Deduced type check failed for unexpected reason";
         }
+
     };
 
-    test_binary_bad_arguments_view_element_types(tv0_2_4_param_0, tv0_2_4_param_2);
-    test_binary_bad_arguments_view_element_types(tv0_2_4_param_2, tv0_2_4_param_0);
-    test_binary_bad_arguments_view_element_types(tv0_2_4_param_2, tv0_2_4_param_3);
+    test_binary_differ_arguments_view_element_types(tv0_2_4_param_0, tv0_2_4_param_2);
+    test_binary_differ_arguments_view_element_types(tv0_2_4_param_2, tv0_2_4_param_0);
+    test_binary_non_bool_arguments_view_element_types(tv0_2_4_param_2, tv0_2_4_param_3);
 
     auto test_binary_good_arguments = [&](const shared_ptr<Node>& x, const shared_ptr<Node>& y) {
         auto node = f(x, y);
@@ -699,10 +661,10 @@ TEST(type_prop, binary_arithmetic_bad_argument_element_types)
         // Should have thrown, so fail if it didn't
         FAIL() << "Did not detect incorrect element types for arithmetic operator";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(),
-                  std::string("Operands for arithmetic operators must have numeric element type"));
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             std::string("Arguments cannot have boolean element type"));
     }
     catch (...)
     {
@@ -719,10 +681,10 @@ TEST(type_prop, unary_arithmetic_bad_argument_element_types)
         // Should have thrown, so fail if it didn't
         FAIL() << "Did not detect incorrect element types for arithmetic operator";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(),
-                  std::string("Operands for arithmetic operators must have numeric element type"));
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             std::string("Arguments cannot have boolean element type"));
     }
     catch (...)
     {
@@ -751,9 +713,9 @@ TEST(type_prop, select_shape_mismatch_a)
         // Should have thrown, so fail if it didn't
         FAIL() << "Did not detect incorrect element types for arithmetic operator";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(), std::string("Arguments must have the same shape"));
+        EXPECT_HAS_SUBSTRING(error.what(), std::string("Arguments do not all have the same shape"));
     }
     catch (...)
     {
@@ -772,9 +734,9 @@ TEST(type_prop, select_shape_mismatch_b)
         // Should have thrown, so fail if it didn't
         FAIL() << "Did not detect incorrect element types for arithmetic operator";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(), std::string("Arguments must have the same shape"));
+        EXPECT_HAS_SUBSTRING(error.what(), std::string("Arguments do not all have the same shape"));
     }
     catch (...)
     {
@@ -793,9 +755,9 @@ TEST(type_prop, select_shape_mismatch_c)
         // Should have thrown, so fail if it didn't
         FAIL() << "Did not detect incorrect element types for arithmetic operator";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(), std::string("Arguments must have the same shape"));
+        EXPECT_HAS_SUBSTRING(error.what(), std::string("Arguments do not all have the same shape"));
     }
     catch (...)
     {
@@ -814,11 +776,10 @@ TEST(type_prop, select_elem_mismatch_a)
         // Should have thrown, so fail if it didn't
         FAIL() << "Did not detect incorrect element types for arithmetic operator";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(
-            error.what(),
-            std::string("Argument 0 for arithmetic operators must have boolean element type"));
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             std::string("Argument 0 does not have boolean element type"));
     }
     catch (...)
     {
@@ -837,9 +798,10 @@ TEST(type_prop, select_elem_mismatch_bc)
         // Should have thrown, so fail if it didn't
         FAIL() << "Did not detect incorrect element types for arithmetic operator";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(), std::string("Arguments 1 and 2 must have the same element type"));
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             std::string("Arguments 1 and 2 do not have the same element type"));
     }
     catch (...)
     {
@@ -1196,11 +1158,11 @@ TEST(type_prop, reshape_deduce_not_enough_axes)
         // Should have thrown, so fail if it didn't
         FAIL() << "Not enough axes not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(
+        EXPECT_HAS_SUBSTRING(
             error.what(),
-            std::string("Input axis order for reshape is not a permutation of argument's axes"));
+            std::string("Input axis order is not a permutation of argument's axis indices"));
     }
     catch (...)
     {
@@ -1217,11 +1179,11 @@ TEST(type_prop, reshape_deduce_too_many_axes)
         // Should have thrown, so fail if it didn't
         FAIL() << "Too many axes not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(
+        EXPECT_HAS_SUBSTRING(
             error.what(),
-            std::string("Input axis order for reshape is not a permutation of argument's axes"));
+            std::string("Input axis order is not a permutation of argument's axis indices"));
     }
     catch (...)
     {
@@ -1238,11 +1200,11 @@ TEST(type_prop, reshape_deduce_duplicate_axes)
         // Should have thrown, so fail if it didn't
         FAIL() << "Too many axes not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(
+        EXPECT_HAS_SUBSTRING(
             error.what(),
-            std::string("Input axis order for reshape is not a permutation of argument's axes"));
+            std::string("Input axis order is not a permutation of argument's axis indices"));
     }
     catch (...)
     {
@@ -1259,11 +1221,122 @@ TEST(type_prop, reshape_deduce_wrong_output_shape)
         // Should have thrown, so fail if it didn't
         FAIL() << "Too many axes not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(),
-                  std::string("Product of output shape dimensions does not match "
-                              "product of argument shape dimensions for reshape"));
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             std::string("Product of output shape dimensions does not match "
+                                         "product of argument shape dimensions"));
+    }
+    catch (...)
+    {
+        FAIL() << "Deduced type check failed for unexpected reason";
+    }
+}
+
+//
+// Input shape rank dynamic, so we should set the desired output shape if the axis vector is not
+// known invalid (invalid means it's not a permutation of {0,...,n-1} for any n).
+//
+TEST(type_prop, reshape_partial_rank_dynamic_axisvector_ok)
+{
+    auto param = make_shared<op::Parameter>(element::f32, PartialShape::dynamic());
+    auto r = make_shared<op::Reshape>(param, AxisVector{2, 1, 0, 3}, Shape{3, 1, 8, 2});
+    ASSERT_EQ(r->get_element_type(), element::f32);
+    ASSERT_TRUE(r->get_output_partial_shape(0).is_static());
+    ASSERT_EQ(r->get_shape(), (Shape{3, 1, 8, 2}));
+}
+
+TEST(type_prop, reshape_partial_rank_dynamic_axisvector_not_ok)
+{
+    auto param = make_shared<op::Parameter>(element::f32, PartialShape::dynamic());
+    try
+    {
+        auto r = make_shared<op::Reshape>(param, AxisVector{2, 1, 0, 4}, Shape{3, 1, 8, 2});
+        // Should have thrown, so fail if it didn't
+        FAIL() << "Did not detect malformed AxisVector (input shape rank dynamic)";
+    }
+    catch (const NodeValidationError& error)
+    {
+        EXPECT_HAS_SUBSTRING(
+            error.what(),
+            std::string("Input axis order is not a permutation of argument's axis indices"));
+    }
+    catch (...)
+    {
+        FAIL() << "Deduced type check failed for unexpected reason";
+    }
+}
+
+//
+// Input shape rank static but input shape is dynamic, so should set desired output shape if the
+// axis vector is consistent with the static rank.
+//
+TEST(type_prop, reshape_partial_rank_static_dynamic_axisvector_ok)
+{
+    auto param_shape =
+        PartialShape{Dimension::dynamic(), 6, Dimension::dynamic(), Dimension::dynamic()};
+    auto param = make_shared<op::Parameter>(element::f32, param_shape);
+    auto r = make_shared<op::Reshape>(param, AxisVector{2, 1, 0, 3}, Shape{3, 1, 8, 2});
+    ASSERT_EQ(r->get_element_type(), element::f32);
+    ASSERT_TRUE(r->get_output_partial_shape(0).is_static());
+    ASSERT_EQ(r->get_shape(), (Shape{3, 1, 8, 2}));
+}
+
+TEST(type_prop, reshape_partial_rank_static_dynamic_axisvector_not_ok)
+{
+    auto param_shape =
+        PartialShape{Dimension::dynamic(), 6, Dimension::dynamic(), Dimension::dynamic()};
+    auto param = make_shared<op::Parameter>(element::f32, param_shape);
+    try
+    {
+        auto r = make_shared<op::Reshape>(param, AxisVector{2, 1, 0}, Shape{3, 1, 8, 2});
+        // Should have thrown, so fail if it didn't
+        FAIL() << "Did not detect AxisVector inconsistent with rank (rank-static dynamic shape)";
+    }
+    catch (const NodeValidationError& error)
+    {
+        EXPECT_HAS_SUBSTRING(
+            error.what(),
+            std::string("Input axis order is not a permutation of argument's axis indices"));
+    }
+    catch (...)
+    {
+        FAIL() << "Deduced type check failed for unexpected reason";
+    }
+}
+
+//
+// Input shape rank static but input shape is dynamic, _but_ one of its static dimensions is zero,
+// so should set desired output shape only if it also has zero elements.
+//
+TEST(type_prop, reshape_partial_rank_static_dynamic_but_zero_ok)
+{
+    auto param_shape =
+        PartialShape{Dimension::dynamic(), 0, Dimension::dynamic(), Dimension::dynamic()};
+    auto param = make_shared<op::Parameter>(element::f32, PartialShape::dynamic());
+    auto r = make_shared<op::Reshape>(param, AxisVector{2, 1, 0, 3}, Shape{3, 1, 0, 2});
+    ASSERT_EQ(r->get_element_type(), element::f32);
+    ASSERT_TRUE(r->get_output_partial_shape(0).is_static());
+    ASSERT_EQ(r->get_shape(), (Shape{3, 1, 0, 2}));
+}
+
+TEST(type_prop, reshape_partial_rank_static_dynamic_but_zero_not_ok)
+{
+    auto param_shape =
+        PartialShape{Dimension::dynamic(), 0, Dimension::dynamic(), Dimension::dynamic()};
+    auto param = make_shared<op::Parameter>(element::f32, param_shape);
+    try
+    {
+        auto r = make_shared<op::Reshape>(param, AxisVector{2, 1, 0}, Shape{3, 1, 8, 2});
+        // Should have thrown, so fail if it didn't
+        FAIL() << "Did not detect inconsistent output shape with static-zero-element rank-dynamic"
+                  " static input shape";
+    }
+    catch (const NodeValidationError& error)
+    {
+        EXPECT_HAS_SUBSTRING(
+            error.what(),
+            std::string("Input axis order is not a permutation of argument's axis indices"));
     }
     catch (...)
     {
@@ -1344,11 +1417,10 @@ TEST(type_prop, slice_deduce_vector_invalid_strides)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid slice strides not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(),
-                  std::string(
-                      "Number of strides provided for slice does not match number of input axes"));
+        EXPECT_HAS_SUBSTRING(
+            error.what(), std::string("Rank of strides (2) does not match rank of argument (1)"));
     }
     catch (...)
     {
@@ -1365,9 +1437,10 @@ TEST(type_prop, slice_deduce_vector_edge_upper_oob)
         // Should have thrown, so fail if it didn't
         FAIL() << "Upper bound out of range not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(), std::string("Upper bound for slice is out of range"));
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             std::string("Upper bound for slice at axis 0 is out of range"));
     }
     catch (...)
     {
@@ -1384,9 +1457,10 @@ TEST(type_prop, slice_deduce_matrix_edge_upper_oob)
         // Should have thrown, so fail if it didn't
         FAIL() << "Upper bound out of range not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(), std::string("Upper bound for slice is out of range"));
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             std::string("Upper bound for slice at axis 1 is out of range"));
     }
     catch (...)
     {
@@ -1403,9 +1477,11 @@ TEST(type_prop, slice_deduce_vector_lower_above_upper)
         // Should have thrown, so fail if it didn't
         FAIL() << "Lower bound above upper not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(), std::string("Lower bound for slice is greater than upper bound"));
+        EXPECT_HAS_SUBSTRING(
+            error.what(),
+            std::string("Lower bound for slice is greater than upper bound at axis 0"));
     }
     catch (...)
     {
@@ -1422,9 +1498,11 @@ TEST(type_prop, slice_deduce_matrix_lower_above_upper)
         // Should have thrown, so fail if it didn't
         FAIL() << "Lower bound above upper not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(), std::string("Lower bound for slice is greater than upper bound"));
+        EXPECT_HAS_SUBSTRING(
+            error.what(),
+            std::string("Lower bound for slice is greater than upper bound at axis 1"));
     }
     catch (...)
     {
@@ -1441,11 +1519,11 @@ TEST(type_prop, slice_deduce_matrix_lower_missing)
         // Should have thrown, so fail if it didn't
         FAIL() << "Missing lower bound coordinate not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(),
-                  std::string("Number of lower bounds provided for slice does "
-                              "not match number of input axes"));
+        EXPECT_HAS_SUBSTRING(
+            error.what(),
+            std::string("Rank of lower bounds (1) does not match rank of argument (2)"));
     }
     catch (...)
     {
@@ -1462,11 +1540,11 @@ TEST(type_prop, slice_deduce_matrix_upper_missing)
         // Should have thrown, so fail if it didn't
         FAIL() << "Missing upper bound coordinate not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(),
-                  std::string("Number of upper bounds provided for slice does "
-                              "not match number of input axes"));
+        EXPECT_HAS_SUBSTRING(
+            error.what(),
+            std::string("Rank of upper bounds (1) does not match rank of argument (2)"));
     }
     catch (...)
     {
@@ -1483,11 +1561,11 @@ TEST(type_prop, slice_deduce_matrix_lower_extra)
         // Should have thrown, so fail if it didn't
         FAIL() << "Extra lower bound coordinate not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(),
-                  std::string("Number of lower bounds provided for slice does "
-                              "not match number of input axes"));
+        EXPECT_HAS_SUBSTRING(
+            error.what(),
+            std::string("Rank of lower bounds (3) does not match rank of argument (2)"));
     }
     catch (...)
     {
@@ -1504,11 +1582,11 @@ TEST(type_prop, slice_deduce_matrix_upper_extra)
         // Should have thrown, so fail if it didn't
         FAIL() << "Extra upper bound coordinate not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(),
-                  std::string("Number of upper bounds provided for slice does "
-                              "not match number of input axes"));
+        EXPECT_HAS_SUBSTRING(
+            error.what(),
+            std::string("Rank of upper bounds (3) does not match rank of argument (2)"));
     }
     catch (...)
     {
@@ -1552,10 +1630,11 @@ TEST(type_prop, tensor_constant_bad_count)
         // Should have thrown, so fail if it didn't
         FAIL() << "Incorrect number of literals not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(),
-                  std::string("Constant does not have the expected number of literals"));
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             std::string("Did not get the expected number of literals for a "
+                                         "constant of shape Shape{2, 2} (got 3, expected 1 or 4)"));
     }
     catch (...)
     {
@@ -1648,11 +1727,10 @@ TEST(type_prop, replace_slice_deduce_vector_invalid_strides)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid slice strides not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(),
-                  std::string(
-                      "Number of strides provided for slice does not match number of input axes"));
+        EXPECT_HAS_SUBSTRING(
+            error.what(), std::string("Rank of strides (2) does not match rank of argument (1)"));
     }
     catch (...)
     {
@@ -1671,9 +1749,9 @@ TEST(type_prop, replace_slice_deduce_matrix_arg_rank_mismatch)
         // Should have thrown, so fail if it didn't
         FAIL() << "Argument rank mismatch not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(), std::string("Replace-slice argument ranks do not match"));
+        EXPECT_HAS_SUBSTRING(error.what(), std::string("Argument ranks do not match"));
     }
     catch (...)
     {
@@ -1692,10 +1770,9 @@ TEST(type_prop, replace_slice_deduce_matrix_arg_element_type_mismatch)
         // Should have thrown, so fail if it didn't
         FAIL() << "Argument element type mismatch not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(),
-                  std::string("Element types for replace-slice arguments do not match"));
+        EXPECT_HAS_SUBSTRING(error.what(), std::string("Argument element types do not match"));
     }
     catch (...)
     {
@@ -1714,10 +1791,11 @@ TEST(type_prop, replace_slice_deduce_matrix_slice_shape_mismatch)
         // Should have thrown, so fail if it didn't
         FAIL() << "Slice shape mismatch not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(),
-                  std::string("Shape of replacement tensor does not match slice shape"));
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             std::string("Shape of replacement tensor (Shape{3, 6}) does not match "
+                                         "the slice shape (Shape{4, 6})"));
     }
     catch (...)
     {
@@ -1736,10 +1814,12 @@ TEST(type_prop, replace_slice_deduce_matrix_slice_shape_mismatch_strided)
         // Should have thrown, so fail if it didn't
         FAIL() << "Slice shape mismatch not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(),
-                  std::string("Shape of replacement tensor does not match slice shape"));
+        EXPECT_HAS_SUBSTRING(
+            error.what(),
+            std::string(
+                "Shape of replacement tensor (Shape{4, 6}) does not match the slice shape"));
     }
     catch (...)
     {
@@ -1757,9 +1837,10 @@ TEST(type_prop, replace_slice_deduce_vector_edge_upper_oob)
         // Should have thrown, so fail if it didn't
         FAIL() << "Upper bound out of range not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(), std::string("Upper bound for slice is out of range"));
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             std::string("Upper bound for slice at axis 0 is out of range"));
     }
     catch (...)
     {
@@ -1778,9 +1859,10 @@ TEST(type_prop, replace_slice_deduce_matrix_edge_upper_oob)
         // Should have thrown, so fail if it didn't
         FAIL() << "Upper bound out of range not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(), std::string("Upper bound for slice is out of range"));
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             std::string("Upper bound for slice at axis 1 is out of range"));
     }
     catch (...)
     {
@@ -1798,9 +1880,11 @@ TEST(type_prop, replace_slice_deduce_vector_lower_above_upper)
         // Should have thrown, so fail if it didn't
         FAIL() << "Lower bound above upper not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(), std::string("Lower bound for slice is greater than upper bound"));
+        EXPECT_HAS_SUBSTRING(
+            error.what(),
+            std::string("Lower bound for slice is greater than upper bound at axis 0"));
     }
     catch (...)
     {
@@ -1819,9 +1903,11 @@ TEST(type_prop, replace_slice_deduce_matrix_lower_above_upper)
         // Should have thrown, so fail if it didn't
         FAIL() << "Lower bound above upper not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(), std::string("Lower bound for slice is greater than upper bound"));
+        EXPECT_HAS_SUBSTRING(
+            error.what(),
+            std::string("Lower bound for slice is greater than upper bound at axis 1"));
     }
     catch (...)
     {
@@ -1839,11 +1925,11 @@ TEST(type_prop, replace_slice_deduce_matrix_lower_missing)
         // Should have thrown, so fail if it didn't
         FAIL() << "Missing lower bound coordinate not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(),
-                  std::string("Number of lower bounds provided for slice does "
-                              "not match number of input axes"));
+        EXPECT_HAS_SUBSTRING(
+            error.what(),
+            std::string("Rank of lower bounds (1) does not match rank of argument (2)"));
     }
     catch (...)
     {
@@ -1861,11 +1947,11 @@ TEST(type_prop, replace_slice_deduce_matrix_upper_missing)
         // Should have thrown, so fail if it didn't
         FAIL() << "Missing upper bound coordinate not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(),
-                  std::string("Number of upper bounds provided for slice does "
-                              "not match number of input axes"));
+        EXPECT_HAS_SUBSTRING(
+            error.what(),
+            std::string("Rank of upper bounds (1) does not match rank of argument (2)"));
     }
     catch (...)
     {
@@ -1884,11 +1970,11 @@ TEST(type_prop, replace_slice_deduce_matrix_lower_extra)
         // Should have thrown, so fail if it didn't
         FAIL() << "Extra lower bound coordinate not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(),
-                  std::string("Number of lower bounds provided for slice does "
-                              "not match number of input axes"));
+        EXPECT_HAS_SUBSTRING(
+            error.what(),
+            std::string("Rank of lower bounds (3) does not match rank of argument (2)"));
     }
     catch (...)
     {
@@ -1907,11 +1993,11 @@ TEST(type_prop, replace_slice_deduce_matrix_upper_extra)
         // Should have thrown, so fail if it didn't
         FAIL() << "Extra upper bound coordinate not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(),
-                  std::string("Number of upper bounds provided for slice does "
-                              "not match number of input axes"));
+        EXPECT_HAS_SUBSTRING(
+            error.what(),
+            std::string("Rank of upper bounds (3) does not match rank of argument (2)"));
     }
     catch (...)
     {
@@ -1984,9 +2070,9 @@ TEST(type_prop, one_hot_deduce_axis_oob)
         // Should have thrown, so fail if it didn't
         FAIL() << "One-hot axis out of bounds not detected.";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(), std::string("One-hot axis is out of bounds"));
+        EXPECT_HAS_SUBSTRING(error.what(), std::string("One-hot axis (3) is out of bounds"));
     }
     catch (...)
     {
@@ -2005,9 +2091,9 @@ TEST(type_prop, one_hot_deduce_shape_incompatible)
     }
     catch (const ngraph_error& error)
     {
-        EXPECT_EQ(
+        EXPECT_HAS_SUBSTRING(
             error.what(),
-            std::string("One-hot argument shape is not compatible with desired output shape"));
+            std::string("Argument shape Shape{12, 24} does not match the expected shape"));
     }
     catch (...)
     {
@@ -2060,7 +2146,7 @@ TEST(type_prop, conv_1d_back_data_batch_deduce)
 TEST(type_prop, conv_1d_back_filters_deduce)
 {
     // Deduce type
-    //Shape data_batch_shape{64, 3, 100};
+    // Shape data_batch_shape{64, 3, 100};
     Shape filters_shape{128, 3, 10};
     auto param0 = make_shared<op::Parameter>(element::f32, Shape{64, 3, 100});  // data batch
     auto param1 = make_shared<op::Parameter>(element::f32, Shape{64, 128, 91}); // output delta
@@ -2137,7 +2223,7 @@ TEST(type_prop, conv_1d_back_data_batch_deduce_padded)
 TEST(type_prop, conv_1d_back_filters_deduce_padded)
 {
     // Deduce type
-    //Shape data_batch_shape{64, 3, 100};
+    // Shape data_batch_shape{64, 3, 100};
     Shape filters_shape{128, 3, 10};
     auto param0 = make_shared<op::Parameter>(element::f32, Shape{64, 3, 100});  // data batch
     auto param1 = make_shared<op::Parameter>(element::f32, Shape{64, 128, 96}); // output delta
@@ -2211,7 +2297,7 @@ TEST(type_prop, conv_1d_back_data_batch_deduce_strided)
 TEST(type_prop, conv_1d_back_filters_deduce_strided)
 {
     // Deduce type
-    //Shape data_batch_shape{64, 3, 100};
+    // Shape data_batch_shape{64, 3, 100};
     Shape filters_shape{128, 3, 10};
     auto param0 = make_shared<op::Parameter>(element::f32, Shape{64, 3, 100});  // data batch
     auto param1 = make_shared<op::Parameter>(element::f32, Shape{64, 128, 46}); // output delta
@@ -2289,7 +2375,7 @@ TEST(type_prop, conv_1d_back_data_batch_deduce_strided_padded)
 TEST(type_prop, conv_1d_back_filters_deduce_strided_padded)
 {
     // Deduce type
-    //Shape data_batch_shape{64, 3, 100};
+    // Shape data_batch_shape{64, 3, 100};
     Shape filters_shape{128, 3, 10};
     auto param0 = make_shared<op::Parameter>(element::f32, Shape{64, 3, 100});  // data batch
     auto param1 = make_shared<op::Parameter>(element::f32, Shape{64, 128, 48}); // output delta
@@ -2363,7 +2449,7 @@ TEST(type_prop, conv_1d_back_data_batch_deduce_strided_small_uneven)
 TEST(type_prop, conv_1d_back_filters_deduce_strided_small_uneven)
 {
     // Deduce type
-    //Shape data_batch_shape{64, 3, 5};
+    // Shape data_batch_shape{64, 3, 5};
     Shape filters_shape{128, 3, 2};
     auto param0 = make_shared<op::Parameter>(element::f32, Shape{64, 3, 5});   // data batch
     auto param1 = make_shared<op::Parameter>(element::f32, Shape{64, 128, 2}); // output delta
@@ -2434,7 +2520,7 @@ TEST(type_prop, conv_1d_back_data_batch_deduce_strided_small_even)
 TEST(type_prop, conv_1d_back_filters_deduce_strided_small_even)
 {
     // Deduce type
-    //Shape data_batch_shape{64, 3, 6};
+    // Shape data_batch_shape{64, 3, 6};
     Shape filters_shape{128, 3, 2};
     auto param0 = make_shared<op::Parameter>(element::f32, Shape{64, 3, 6});   // data batch
     auto param1 = make_shared<op::Parameter>(element::f32, Shape{64, 128, 3}); // output delta
@@ -2507,7 +2593,7 @@ TEST(type_prop, conv_1d_back_data_batch_deduce_window_dilated)
 TEST(type_prop, conv_1d_back_filters_deduce_window_dilated)
 {
     // Deduce type
-    //Shape data_batch_shape{64, 3, 100};
+    // Shape data_batch_shape{64, 3, 100};
     Shape filters_shape{128, 3, 10};
     auto param0 = make_shared<op::Parameter>(element::f32, Shape{64, 3, 100});  // data batch
     auto param1 = make_shared<op::Parameter>(element::f32, Shape{64, 128, 82}); // output delta
@@ -2586,7 +2672,7 @@ TEST(type_prop, conv_1d_back_data_batch_deduce_window_dilated_padded)
 TEST(type_prop, conv_1d_back_filters_deduce_window_dilated_padded)
 {
     // Deduce type
-    //Shape data_batch_shape{64, 3, 100};
+    // Shape data_batch_shape{64, 3, 100};
     Shape filters_shape{128, 3, 10};
     auto param0 = make_shared<op::Parameter>(element::f32, Shape{64, 3, 100});  // data batch
     auto param1 = make_shared<op::Parameter>(element::f32, Shape{64, 128, 87}); // output delta
@@ -2674,7 +2760,7 @@ TEST(type_prop, conv_1d_back_data_batch_deduce_window_dilated_data_dilated_padde
 TEST(type_prop, conv_1d_back_filters_deduce_window_dilated_data_dilated_padded)
 {
     // Deduce type
-    //Shape data_batch_shape{64, 3, 100};
+    // Shape data_batch_shape{64, 3, 100};
     Shape filters_shape{128, 3, 10};
     auto param0 = make_shared<op::Parameter>(element::f32, Shape{64, 3, 100});   // data batch
     auto param1 = make_shared<op::Parameter>(element::f32, Shape{64, 128, 285}); // output delta
@@ -2906,10 +2992,10 @@ TEST(type_prop, conv_invalid_element_type_mismatch)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid input with element type mismatch not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(),
-                  std::string("Convolution data batch and filter element types do not match"));
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             std::string("Element types for data batch and filters do not match"));
     }
     catch (...)
     {
@@ -2929,12 +3015,12 @@ TEST(type_prop, conv_invalid_0d_input)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid 0D input not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(),
-                  std::string("Convolution data batch input must have rank of at "
-                              "least 3 (one batch axis, one input-channel axis, at "
-                              "least one spatial dimension)."));
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             std::string("Data batch must have rank of at least 3 "
+                                         "(one batch axis, one input-channel axis, "
+                                         "and at least one spatial dimension)"));
     }
     catch (...)
     {
@@ -2954,12 +3040,12 @@ TEST(type_prop, conv_invalid_1d_input)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid 1D input not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(),
-                  std::string("Convolution data batch input must have rank of at "
-                              "least 3 (one batch axis, one input-channel axis, at "
-                              "least one spatial dimension)."));
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             std::string("Data batch must have rank of at least 3 "
+                                         "(one batch axis, one input-channel axis, "
+                                         "and at least one spatial dimension)"));
     }
     catch (...)
     {
@@ -2979,12 +3065,12 @@ TEST(type_prop, conv_invalid_2d_input)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid 2D input not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(),
-                  std::string("Convolution data batch input must have rank of at "
-                              "least 3 (one batch axis, one input-channel axis, at "
-                              "least one spatial dimension)."));
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             std::string("Data batch must have rank of at least 3 "
+                                         "(one batch axis, one input-channel axis, "
+                                         "and at least one spatial dimension)"));
     }
     catch (...)
     {
@@ -3004,9 +3090,9 @@ TEST(type_prop, conv_invalid_0_batch_size)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid input with 0 batch size not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(), std::string("Convolution data batch size is zero."));
+        EXPECT_HAS_SUBSTRING(error.what(), std::string("Batch size is zero"));
     }
     catch (...)
     {
@@ -3026,9 +3112,9 @@ TEST(type_prop, conv_invalid_0_input_channels)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid input with 0 input channels not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(), std::string("Convolution requires at least one input channel."));
+        EXPECT_HAS_SUBSTRING(error.what(), std::string("Data batch channel count is zero"));
     }
     catch (...)
     {
@@ -3048,11 +3134,11 @@ TEST(type_prop, conv_invalid_wrong_number_of_filter_dimensions_too_many)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid input with too many filter dimensions not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(
-            error.what(),
-            std::string("Convolution filter input must have rank of 2 + n_spatial_dimensions."));
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             std::string("Data shape (Shape{10, 10}) does not have same rank as "
+                                         "the window shape (Shape{3, 3, 3})"));
     }
     catch (...)
     {
@@ -3072,11 +3158,11 @@ TEST(type_prop, conv_invalid_wrong_number_of_filter_dimensions_too_few)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid input with too few filter dimensions not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(
-            error.what(),
-            std::string("Convolution filter input must have rank of 2 + n_spatial_dimensions."));
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             std::string("Data shape (Shape{10, 10}) does not have "
+                                         "same rank as the window shape (Shape{3})"));
     }
     catch (...)
     {
@@ -3096,9 +3182,9 @@ TEST(type_prop, conv_invalid_0_output_channels)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid input with 0 output channels not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(), std::string("Convolution requires at least one output channel."));
+        EXPECT_HAS_SUBSTRING(error.what(), std::string("Filter output channel count is zero"));
     }
     catch (...)
     {
@@ -3118,11 +3204,12 @@ TEST(type_prop, conv_invalid_input_channel_mismatch)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid input with channel count mismatch not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(
+        EXPECT_HAS_SUBSTRING(
             error.what(),
-            std::string("Convolution data batch and filter input channel counts do not match."));
+            std::string(
+                "Data batch channel count (2) does not match filter input channel count (3)"));
     }
     catch (...)
     {
@@ -3142,11 +3229,11 @@ TEST(type_prop, conv_invalid_movement_stride_rank)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid input with wrong movement stride rank not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(),
-                  std::string("Convolution window movement stride rank does not "
-                              "match number of spatial dimensions."));
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             std::string("Data shape (Shape{10, 10}) does not have same rank as "
+                                         "the window strides (Strides{2, 3, 8})"));
     }
     catch (...)
     {
@@ -3166,11 +3253,11 @@ TEST(type_prop, conv_invalid_window_dilation_stride_rank)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid input with wrong window dilation stride rank not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(),
-                  std::string("Convolution window dilation stride rank does not "
-                              "match number of spatial dimensions."));
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             std::string("Data shape (Shape{10, 10}) does not have same rank as "
+                                         "the window dilation (Strides{2, 3, 8})"));
     }
     catch (...)
     {
@@ -3196,11 +3283,11 @@ TEST(type_prop, conv_invalid_data_dilation_stride_rank)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid input with wrong data dilation stride rank not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(),
-                  std::string("Convolution data dilation stride rank does not "
-                              "match number of spatial dimensions."));
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             std::string("Data shape (Shape{10, 10}) does not have same rank as "
+                                         "the data dilation (Strides{2, 3, 8})"));
     }
     catch (...)
     {
@@ -3225,11 +3312,11 @@ TEST(type_prop, conv_invalid_padding_below_rank)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid input with wrong padding-below rank not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(),
-                  std::string("Convolution padding-below rank does not "
-                              "match number of spatial dimensions."));
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             std::string("Data shape (Shape{10, 10}) does not have same rank as "
+                                         "the data padding below (CoordinateDiff{0, 0, 0})"));
     }
     catch (...)
     {
@@ -3254,11 +3341,11 @@ TEST(type_prop, conv_invalid_padding_above_rank)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid input with wrong padding-above rank not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(),
-                  std::string("Convolution padding-above rank does not "
-                              "match number of spatial dimensions."));
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             std::string("Data shape (Shape{10, 10}) does not have same rank as "
+                                         "the data padding above (CoordinateDiff{0, 0, 0})"));
     }
     catch (...)
     {
@@ -3275,20 +3362,19 @@ TEST(type_prop, conv_invalid_input_spatial_size_negative_after_padding)
     {
         auto conv = make_shared<op::Convolution>(param0,
                                                  param1,
-                                                 Strides{0, 0},
-                                                 Strides{0, 0},
+                                                 Strides{1, 1},
+                                                 Strides{1, 1},
                                                  CoordinateDiff{-4, 0},
                                                  CoordinateDiff{-7, 0});
 
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid input with negative-length post-padding spatial axis not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(
-            error.what(),
-            std::string(
-                "Convolution input spatial dimension after padding and dilation is negative."));
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             std::string("Data shape after padding and dilation has dimension less "
+                                         "than 1 (dim: -1) at axis 0"));
     }
     catch (...)
     {
@@ -3305,20 +3391,19 @@ TEST(type_prop, conv_invalid_input_spatial_size_zero_after_padding)
     {
         auto conv = make_shared<op::Convolution>(param0,
                                                  param1,
-                                                 Strides{0, 0},
-                                                 Strides{0, 0},
+                                                 Strides{1, 1},
+                                                 Strides{1, 1},
                                                  CoordinateDiff{-4, 0},
                                                  CoordinateDiff{-6, 0});
 
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid input with zero-length post-padding spatial axis not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(
-            error.what(),
-            std::string(
-                "Convolution input spatial dimension after dilation is zero even with padding."));
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             std::string("Data shape after padding and dilation has dimension less "
+                                         "than 1 (dim: 0) at axis 0"));
     }
     catch (...)
     {
@@ -3338,12 +3423,11 @@ TEST(type_prop, conv_invalid_input_spatial_size_0)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid input with zero-length spatial axis not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(
-            error.what(),
-            std::string(
-                "Convolution input spatial dimension after dilation is zero even with padding."));
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             std::string("Data shape after padding and dilation has "
+                                         "dimension less than 1 (dim: 0) at axis 0"));
     }
     catch (...)
     {
@@ -3363,9 +3447,11 @@ TEST(type_prop, conv_invalid_window_size_0)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid input with zero-length window axis not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(), std::string("Convolution window shape has a zero-length axis."));
+        EXPECT_HAS_SUBSTRING(
+            error.what(),
+            std::string("Window after dilation has dimension less than 1 (dim: 0) at axis 1"));
     }
     catch (...)
     {
@@ -3385,9 +3471,11 @@ TEST(type_prop, conv_invalid_window_dilation_stride_0)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid input with wrong 0-length window dilation stride axis not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(), std::string("Convolution window axis dilation stride is zero."));
+        EXPECT_HAS_SUBSTRING(
+            error.what(),
+            std::string("Window dilation (Strides{2, 0}) has zero dimension at axis 1"));
     }
     catch (...)
     {
@@ -3413,9 +3501,11 @@ TEST(type_prop, conv_invalid_data_dilation_stride_0)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid input with wrong 0-length data dilation stride axis not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(), std::string("Convolution data dilation stride is zero."));
+        EXPECT_HAS_SUBSTRING(
+            error.what(),
+            std::string("Data dilation (Strides{2, 0}) has zero dimension at axis 1"));
     }
     catch (...)
     {
@@ -3435,11 +3525,11 @@ TEST(type_prop, conv_invalid_dilated_window_too_large)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid input with oversized dilated window not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(),
-                  std::string("Convolution window after dilation is larger than the "
-                              "spatial dimensions even with padding."));
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             std::string("Window after dilation has dimension (dim: 9) larger than "
+                                         "the data shape after padding (dim: 8) at axis 0"));
     }
     catch (...)
     {
@@ -3459,9 +3549,11 @@ TEST(type_prop, conv_invalid_movement_stride_0)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid input with wrong 0-length movement stride axis not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(), std::string("Convolution window axis movement stride is zero."));
+        EXPECT_HAS_SUBSTRING(
+            error.what(),
+            std::string("Window strides (Strides{0, 1}) has zero dimension at axis 0"));
     }
     catch (...)
     {
@@ -3584,12 +3676,10 @@ TEST(type_prop, max_pool_invalid_0d_input)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid 0D input not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(),
-                  std::string("Max-pool data batch input must have rank of at "
-                              "least 3 (one batch axis, one channel axis, at "
-                              "least one spatial dimension)."));
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             std::string("Data input shape does not have rank of at least 3"));
     }
     catch (...)
     {
@@ -3609,12 +3699,10 @@ TEST(type_prop, max_pool_invalid_1d_input)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid 1D input not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(),
-                  std::string("Max-pool data batch input must have rank of at "
-                              "least 3 (one batch axis, one channel axis, at "
-                              "least one spatial dimension)."));
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             std::string("Data input shape does not have rank of at least 3"));
     }
     catch (...)
     {
@@ -3634,12 +3722,10 @@ TEST(type_prop, max_pool_invalid_2d_input)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid 2D input not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(),
-                  std::string("Max-pool data batch input must have rank of at "
-                              "least 3 (one batch axis, one channel axis, at "
-                              "least one spatial dimension)."));
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             std::string("Data input shape does not have rank of at least 3"));
     }
     catch (...)
     {
@@ -3659,9 +3745,9 @@ TEST(type_prop, max_pool_invalid_0_batch_size)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid input with 0 batch size not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(), std::string("Max-pool data batch size is zero."));
+        EXPECT_HAS_SUBSTRING(error.what(), std::string("Batch size is zero"));
     }
     catch (...)
     {
@@ -3681,9 +3767,9 @@ TEST(type_prop, max_pool_invalid_0_channels)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid input with 0 channels not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(), std::string("Max-pool requires at least one feature channel."));
+        EXPECT_HAS_SUBSTRING(error.what(), std::string("Channel count is zero"));
     }
     catch (...)
     {
@@ -3703,11 +3789,11 @@ TEST(type_prop, max_pool_invalid_wrong_number_of_window_dimensions_too_many)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid input with too many window dimensions not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(
+        EXPECT_HAS_SUBSTRING(
             error.what(),
-            std::string("Max-pool window shape rank does not match number of spatial dimensions."));
+            std::string("Window shape (Shape{3, 3, 3}) does not have required rank (2)"));
     }
     catch (...)
     {
@@ -3727,11 +3813,10 @@ TEST(type_prop, max_pool_invalid_wrong_number_of_window_dimensions_too_few)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid input with too few window dimensions not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(
-            error.what(),
-            std::string("Max-pool window shape rank does not match number of spatial dimensions."));
+        EXPECT_HAS_SUBSTRING(
+            error.what(), std::string("Window shape (Shape{3}) does not have required rank (2)"));
     }
     catch (...)
     {
@@ -3752,11 +3837,11 @@ TEST(type_prop, max_pool_invalid_movement_stride_rank)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid input with wrong movement stride rank not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(),
-                  std::string("Max-pool window movement stride rank does not "
-                              "match number of spatial dimensions."));
+        EXPECT_HAS_SUBSTRING(
+            error.what(),
+            std::string("Window shape (Strides{2, 3, 8}) does not have required rank (2)"));
     }
     catch (...)
     {
@@ -3776,10 +3861,11 @@ TEST(type_prop, max_pool_invalid_input_data_size_0)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid input with zero-length spatial axis not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(),
-                  std::string("Max-pool input spatial dimension is zero even after padding."));
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             std::string("Data shape after padding and dilation has "
+                                         "dimension less than 1 (dim: 0) at axis 0"));
     }
     catch (...)
     {
@@ -3799,9 +3885,11 @@ TEST(type_prop, max_pool_invalid_window_size_0)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid input with zero-length window axis not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(), std::string("Max-pool window shape has a zero-length axis."));
+        EXPECT_HAS_SUBSTRING(
+            error.what(),
+            std::string("Window after dilation has dimension less than 1 (dim: 0) at axis 1"));
     }
     catch (...)
     {
@@ -3821,12 +3909,11 @@ TEST(type_prop, max_pool_invalid_dilated_too_large)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid input with oversized window not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(
-            error.what(),
-            std::string(
-                "Max-pool window shape is larger than the spatial dimensions even after padding."));
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             std::string("Window after dilation has dimension (dim: 9) larger than "
+                                         "the data shape after padding (dim: 8) at axis 0"));
     }
     catch (...)
     {
@@ -3847,9 +3934,11 @@ TEST(type_prop, max_pool_invalid_movement_stride_0)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid input with 0-length movement stride axis not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(), std::string("Max-pool window axis movement stride is zero."));
+        EXPECT_HAS_SUBSTRING(
+            error.what(),
+            std::string("Window strides (Strides{0, 1}) has zero dimension at axis 0"));
     }
     catch (...)
     {
@@ -4018,9 +4107,56 @@ TEST(type_prop, reverse_3d_deduce_oob)
         // Should have thrown, so fail if it didn't
         FAIL() << "Axis out of bounds not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(), std::string("Reverse axis 3 is out of bounds (input rank is 3)."));
+        EXPECT_HAS_SUBSTRING(error.what(), std::string("Reverse axis (3) is out of bounds"));
+    }
+    catch (...)
+    {
+        FAIL() << "Deduced type check failed for unexpected reason";
+    }
+}
+
+//
+// If the input rank is dynamic, we should pass unconditionally.
+//
+TEST(type_prop, reverse_partial_rank_dynamic)
+{
+    auto param = make_shared<op::Parameter>(element::f32, PartialShape::dynamic());
+    auto rev = make_shared<op::Reverse>(param, AxisSet{0, 2, 1776, 90909});
+
+    EXPECT_EQ(rev->get_element_type(), element::f32);
+    EXPECT_TRUE(rev->get_output_partial_shape(0).rank().is_dynamic());
+}
+
+//
+// If the input rank is static but the shape is dynamic, we should pass if the axis indices are
+// in bounds.
+//
+TEST(type_prop, reverse_partial_rank_static_dynamic_axes_ok)
+{
+    PartialShape param_shape{Dimension::dynamic(), Dimension::dynamic(), 2, 3};
+    auto param = make_shared<op::Parameter>(element::f32, param_shape);
+    auto rev = make_shared<op::Reverse>(param, AxisSet{0, 2});
+
+    EXPECT_EQ(rev->get_element_type(), element::f32);
+    EXPECT_TRUE(rev->get_output_partial_shape(0).same_scheme(param_shape));
+}
+
+TEST(type_prop, reverse_partial_rank_static_dynamic_axes_oob)
+{
+    PartialShape param_shape{Dimension::dynamic(), Dimension::dynamic(), 2, 3};
+    auto param = make_shared<op::Parameter>(element::f32, param_shape);
+    try
+    {
+        auto rev = make_shared<op::Reverse>(param, AxisSet{0, 4, 2});
+
+        // Should have thrown, so fail if it didn't
+        FAIL() << "Axis out of bounds not detected";
+    }
+    catch (const NodeValidationError& error)
+    {
+        EXPECT_HAS_SUBSTRING(error.what(), std::string("Reverse axis (4) is out of bounds"));
     }
     catch (...)
     {
@@ -4039,9 +4175,10 @@ TEST(type_prop, reverse_sequence_1_dim)
         auto bc = make_shared<op::ReverseSequence>(data, seq_lenghts, batch_axis, seq_axis);
         FAIL() << "ReverseSequence c-tor should throw for seq_lenghts whose rank isn't equal to 1";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(), std::string("indices should be a 1-dimensional array"));
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             std::string("Sequence indices must be a 1-dimensional tensor"));
     }
     catch (...)
     {
@@ -4060,9 +4197,9 @@ TEST(type_prop, reverse_sequence_batch_index_oob)
         auto bc = make_shared<op::ReverseSequence>(data, seq_lenghts, batch_axis, seq_axis);
         FAIL() << "ReverseSequence c-tor should throw for out-of-bounds batch axis index";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(), std::string("batch axis index is out of bounds"));
+        EXPECT_HAS_SUBSTRING(error.what(), std::string("Batch axis index (3) is out of bounds"));
     }
     catch (...)
     {
@@ -4073,17 +4210,17 @@ TEST(type_prop, reverse_sequence_batch_index_oob)
 TEST(type_prop, reverse_sequence_sequence_index_oob)
 {
     auto data = make_shared<op::Parameter>(element::f32, Shape{4, 3, 2});
-    auto seq_lenghts = make_shared<op::Parameter>(element::f32, Shape{3});
+    auto seq_lengths = make_shared<op::Parameter>(element::f32, Shape{3});
     try
     {
         size_t batch_axis = 1;
         size_t seq_axis = 3;
-        auto bc = make_shared<op::ReverseSequence>(data, seq_lenghts, batch_axis, seq_axis);
+        auto bc = make_shared<op::ReverseSequence>(data, seq_lengths, batch_axis, seq_axis);
         FAIL() << "ReverseSequence c-tor should throw for out-of-bounds sequence axis index";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(), std::string("sequence axis index is out of bounds"));
+        EXPECT_HAS_SUBSTRING(error.what(), std::string("Sequence axis index (3) is out of bounds"));
     }
     catch (...)
     {
@@ -4103,10 +4240,192 @@ TEST(type_prop, reverse_sequence_seq_len_size_equal_to_batch_dim)
         FAIL() << "ReverseSequence c-tor should throw when sequence length size isn't equal to "
                   "batch dimension";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(),
-                  std::string("Sequence length size should be equal to batch axis dimension"));
+        EXPECT_HAS_SUBSTRING(
+            error.what(),
+            std::string("Sequence length (3) is not equal to batch axis dimension (4)"));
+    }
+    catch (...)
+    {
+        FAIL() << "Deduced type check failed for unexpected reason";
+    }
+}
+
+TEST(type_prop, reverse_sequence_partial_both_rank_dynamic)
+{
+    auto data = make_shared<op::Parameter>(element::f32, PartialShape::dynamic());
+    auto seq_lengths = make_shared<op::Parameter>(element::f32, PartialShape::dynamic());
+    // Unrealistic values, but they don't matter here.
+    size_t batch_axis = 202;
+    size_t seq_axis = 909;
+    auto rs = make_shared<op::ReverseSequence>(data, seq_lengths, batch_axis, seq_axis);
+
+    EXPECT_TRUE(rs->get_output_partial_shape(0).is_dynamic());
+    EXPECT_EQ(rs->get_output_element_type(0), element::f32);
+}
+
+TEST(type_prop, reverse_sequence_partial_left_rank_dynamic)
+{
+    auto data = make_shared<op::Parameter>(element::f32, PartialShape::dynamic());
+    auto seq_lengths = make_shared<op::Parameter>(element::f32, PartialShape{3});
+    // Unrealistic values, but they don't matter here.
+    size_t batch_axis = 202;
+    size_t seq_axis = 909;
+    auto rs = make_shared<op::ReverseSequence>(data, seq_lengths, batch_axis, seq_axis);
+
+    EXPECT_TRUE(rs->get_output_partial_shape(0).is_dynamic());
+    EXPECT_EQ(rs->get_output_element_type(0), element::f32);
+}
+
+TEST(type_prop, reverse_sequence_partial_right_rank_dynamic)
+{
+    auto data = make_shared<op::Parameter>(element::f32, PartialShape{2, 4, 6, 8});
+    auto seq_lengths = make_shared<op::Parameter>(element::f32, PartialShape::dynamic());
+    size_t batch_axis = 0;
+    size_t seq_axis = 1;
+    auto rs = make_shared<op::ReverseSequence>(data, seq_lengths, batch_axis, seq_axis);
+
+    EXPECT_TRUE(rs->get_output_partial_shape(0).same_scheme(PartialShape{2, 4, 6, 8}));
+    EXPECT_EQ(rs->get_output_element_type(0), element::f32);
+}
+
+TEST(type_prop, reverse_sequence_partial_both_rank_static_dynamic)
+{
+    auto data = make_shared<op::Parameter>(element::f32,
+                                           PartialShape{Dimension::dynamic(),
+                                                        Dimension::dynamic(),
+                                                        Dimension::dynamic(),
+                                                        Dimension::dynamic()});
+    auto seq_lengths = make_shared<op::Parameter>(element::f32, PartialShape::dynamic());
+    size_t batch_axis = 0;
+    size_t seq_axis = 1;
+    auto rs = make_shared<op::ReverseSequence>(data, seq_lengths, batch_axis, seq_axis);
+
+    EXPECT_TRUE(rs->get_output_partial_shape(0).same_scheme(PartialShape{
+        Dimension::dynamic(), Dimension::dynamic(), Dimension::dynamic(), Dimension::dynamic()}));
+    EXPECT_EQ(rs->get_output_element_type(0), element::f32);
+}
+
+TEST(type_prop, reverse_sequence_partial_both_rank_static_dynamic_batch_axis_oob)
+{
+    auto data = make_shared<op::Parameter>(element::f32,
+                                           PartialShape{Dimension::dynamic(),
+                                                        Dimension::dynamic(),
+                                                        Dimension::dynamic(),
+                                                        Dimension::dynamic()});
+    auto seq_lengths = make_shared<op::Parameter>(element::f32, PartialShape{Dimension::dynamic()});
+    size_t batch_axis = 4;
+    size_t seq_axis = 1;
+    try
+    {
+        auto rs = make_shared<op::ReverseSequence>(data, seq_lengths, batch_axis, seq_axis);
+        FAIL() << "Batch axis out of bounds not detected (rank-static dynamic shape)";
+    }
+    catch (const NodeValidationError& error)
+    {
+        EXPECT_HAS_SUBSTRING(error.what(), std::string("Batch axis index (4) is out of bounds"));
+    }
+    catch (...)
+    {
+        FAIL() << "Deduced type check failed for unexpected reason";
+    }
+}
+
+TEST(type_prop, reverse_sequence_partial_both_rank_static_dynamic_sequence_axis_oob)
+{
+    auto data = make_shared<op::Parameter>(element::f32,
+                                           PartialShape{Dimension::dynamic(),
+                                                        Dimension::dynamic(),
+                                                        Dimension::dynamic(),
+                                                        Dimension::dynamic()});
+    auto seq_lengths = make_shared<op::Parameter>(element::f32, PartialShape{Dimension::dynamic()});
+    size_t batch_axis = 1;
+    size_t seq_axis = 4;
+    try
+    {
+        auto rs = make_shared<op::ReverseSequence>(data, seq_lengths, batch_axis, seq_axis);
+        FAIL() << "Sequence axis out of bounds not detected (rank-static dynamic shape)";
+    }
+    catch (const NodeValidationError& error)
+    {
+        EXPECT_HAS_SUBSTRING(error.what(), std::string("Sequence axis index (4) is out of bounds"));
+    }
+    catch (...)
+    {
+        FAIL() << "Deduced type check failed for unexpected reason";
+    }
+}
+
+TEST(type_prop,
+     reverse_sequence_partial_left_rank_static_dynamic_right_static_left_seq_length_dynamic)
+{
+    auto data = make_shared<op::Parameter>(element::f32,
+                                           PartialShape{Dimension::dynamic(),
+                                                        Dimension::dynamic(),
+                                                        Dimension::dynamic(),
+                                                        Dimension::dynamic()});
+    auto seq_lengths = make_shared<op::Parameter>(element::f32, PartialShape{3});
+    size_t batch_axis = 2;
+    size_t seq_axis = 1;
+    auto rs = make_shared<op::ReverseSequence>(data, seq_lengths, batch_axis, seq_axis);
+
+    EXPECT_TRUE(rs->get_output_partial_shape(0).same_scheme(
+        PartialShape{Dimension::dynamic(), Dimension::dynamic(), 3, Dimension::dynamic()}));
+    EXPECT_EQ(rs->get_output_element_type(0), element::f32);
+}
+
+TEST(type_prop, reverse_sequence_partial_both_rank_static_dynamic_right_seq_length_dynamic)
+{
+    auto data = make_shared<op::Parameter>(
+        element::f32,
+        PartialShape{Dimension::dynamic(), Dimension::dynamic(), 3, Dimension::dynamic()});
+    auto seq_lengths = make_shared<op::Parameter>(element::f32, PartialShape{Dimension::dynamic()});
+    size_t batch_axis = 2;
+    size_t seq_axis = 1;
+    auto rs = make_shared<op::ReverseSequence>(data, seq_lengths, batch_axis, seq_axis);
+
+    EXPECT_TRUE(rs->get_output_partial_shape(0).same_scheme(
+        PartialShape{Dimension::dynamic(), Dimension::dynamic(), 3, Dimension::dynamic()}));
+    EXPECT_EQ(rs->get_output_element_type(0), element::f32);
+}
+
+TEST(type_prop,
+     reverse_sequence_partial_left_rank_static_dynamic_right_static_left_seq_length_static)
+{
+    auto data = make_shared<op::Parameter>(
+        element::f32,
+        PartialShape{Dimension::dynamic(), Dimension::dynamic(), 3, Dimension::dynamic()});
+    auto seq_lengths = make_shared<op::Parameter>(element::f32, PartialShape{3});
+    size_t batch_axis = 2;
+    size_t seq_axis = 1;
+    auto rs = make_shared<op::ReverseSequence>(data, seq_lengths, batch_axis, seq_axis);
+
+    EXPECT_TRUE(rs->get_output_partial_shape(0).same_scheme(
+        PartialShape{Dimension::dynamic(), Dimension::dynamic(), 3, Dimension::dynamic()}));
+    EXPECT_EQ(rs->get_output_element_type(0), element::f32);
+}
+
+TEST(
+    type_prop,
+    reverse_sequence_partial_left_rank_static_dynamic_right_static_left_seq_length_static_inconsistent)
+{
+    auto data = make_shared<op::Parameter>(
+        element::f32,
+        PartialShape{Dimension::dynamic(), Dimension::dynamic(), 3, Dimension::dynamic()});
+    auto seq_lengths = make_shared<op::Parameter>(element::f32, PartialShape{4});
+    size_t batch_axis = 2;
+    size_t seq_axis = 1;
+    try
+    {
+        auto rs = make_shared<op::ReverseSequence>(data, seq_lengths, batch_axis, seq_axis);
+        FAIL() << "Inconsistent sequence length not detected (rank-static dynamic shape)";
+    }
+    catch (const NodeValidationError& error)
+    {
+        EXPECT_HAS_SUBSTRING(
+            error.what(),
+            std::string("Sequence length (4) is not equal to batch axis dimension (3)"));
     }
     catch (...)
     {
@@ -5684,10 +6003,9 @@ TEST(type_prop, select_and_scatter_deduce_scatter_function_wrong_result_element_
     }
     catch (const ngraph_error& error)
     {
-        EXPECT_EQ(
-            error.what(),
-            std::string(
-                "Return element type from scatter function does not match the init value type"));
+        EXPECT_EQ(error.what(),
+                  std::string("Return element type from scatter function does "
+                              "not match the init value type"));
     }
     catch (...)
     {
@@ -5882,7 +6200,7 @@ TEST(type_prop, avg_pool_invalid_0d_input)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid 0D input not detected";
     }
-    catch (const TypeCheckError& error)
+    catch (const NodeValidationError& error)
     {
         EXPECT_HAS_SUBSTRING(error.what(), "Data input shape does not have rank of at least 3");
     }
@@ -5904,7 +6222,7 @@ TEST(type_prop, avg_pool_invalid_1d_input)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid 1D input not detected";
     }
-    catch (const TypeCheckError& error)
+    catch (const NodeValidationError& error)
     {
         EXPECT_HAS_SUBSTRING(error.what(), "Data input shape does not have rank of at least 3");
     }
@@ -5926,7 +6244,7 @@ TEST(type_prop, avg_pool_invalid_2d_input)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid 2D input not detected";
     }
-    catch (const TypeCheckError& error)
+    catch (const NodeValidationError& error)
     {
         EXPECT_HAS_SUBSTRING(error.what(), "Data input shape does not have rank of at least 3");
     }
@@ -5948,9 +6266,9 @@ TEST(type_prop, avg_pool_invalid_0_batch_size)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid input with 0 batch size not detected";
     }
-    catch (const TypeCheckError& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_HAS_SUBSTRING(error.what(), "Data batch size is zero");
+        EXPECT_HAS_SUBSTRING(error.what(), "Batch size is zero");
     }
     catch (...)
     {
@@ -5970,7 +6288,7 @@ TEST(type_prop, avg_pool_invalid_0_channels)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid input with 0 channels not detected";
     }
-    catch (const TypeCheckError& error)
+    catch (const NodeValidationError& error)
     {
         EXPECT_HAS_SUBSTRING(error.what(), "Channel count is zero");
     }
@@ -5992,10 +6310,10 @@ TEST(type_prop, avg_pool_invalid_wrong_number_of_window_dimensions_too_many)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid input with too many window dimensions not detected";
     }
-    catch (const TypeCheckError& error)
+    catch (const NodeValidationError& error)
     {
         EXPECT_HAS_SUBSTRING(error.what(),
-                             "Window shape rank does not match number of spatial dimensions");
+                             "Window shape (Shape{3, 3, 3}) does not have required rank (2)");
     }
     catch (...)
     {
@@ -6015,10 +6333,10 @@ TEST(type_prop, avg_pool_invalid_wrong_number_of_window_dimensions_too_few)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid input with too few window dimensions not detected";
     }
-    catch (const TypeCheckError& error)
+    catch (const NodeValidationError& error)
     {
         EXPECT_HAS_SUBSTRING(error.what(),
-                             "Window shape rank does not match number of spatial dimensions");
+                             "Window shape (Shape{3}) does not have required rank (2)");
     }
     catch (...)
     {
@@ -6039,11 +6357,10 @@ TEST(type_prop, avg_pool_invalid_movement_stride_rank)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid input with wrong movement stride rank not detected";
     }
-    catch (const TypeCheckError& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_HAS_SUBSTRING(
-            error.what(),
-            "Window movement stride rank does not match number of spatial dimensions");
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             "Window shape (Strides{2, 3, 8}) does not have required rank (2)");
     }
     catch (...)
     {
@@ -6067,10 +6384,11 @@ TEST(type_prop, avg_pool_invalid_padding_below_rank)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid input with wrong below-padding rank not detected";
     }
-    catch (const TypeCheckError& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_HAS_SUBSTRING(error.what(),
-                             "Below-padding rank does not match number of spatial dimensions");
+        EXPECT_HAS_SUBSTRING(
+            error.what(),
+            "Data padding below (CoordinateDiff{1, 2, 3}) does not have required rank (2)");
     }
     catch (...)
     {
@@ -6094,10 +6412,11 @@ TEST(type_prop, avg_pool_invalid_padding_above_rank)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid input with wrong above-padding rank not detected";
     }
-    catch (const TypeCheckError& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_HAS_SUBSTRING(error.what(),
-                             "Above-padding rank does not match number of spatial dimensions");
+        EXPECT_HAS_SUBSTRING(
+            error.what(),
+            "Data padding above (CoordinateDiff{1, 2, 3}) does not have required rank (2");
     }
     catch (...)
     {
@@ -6117,10 +6436,11 @@ TEST(type_prop, avg_pool_invalid_input_item_size_0)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid input with zero-length spatial axis not detected";
     }
-    catch (const TypeCheckError& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_HAS_SUBSTRING(error.what(),
-                             "Data input spatial dimension 0 has zero length even after padding");
+        EXPECT_HAS_SUBSTRING(
+            error.what(),
+            "Data shape after padding and dilation has dimension less than 1 (dim: 0) at axis 0");
     }
     catch (...)
     {
@@ -6140,9 +6460,10 @@ TEST(type_prop, avg_pool_invalid_window_size_0)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid input with zero-length window axis not detected";
     }
-    catch (const TypeCheckError& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_HAS_SUBSTRING(error.what(), "Window shape dimension 1 has zero length");
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             "Window after dilation has dimension less than 1 (dim: 0) at axis 1");
     }
     catch (...)
     {
@@ -6162,15 +6483,30 @@ TEST(type_prop, avg_pool_invalid_dilated_too_large)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid input with oversized window not detected";
     }
-    catch (const TypeCheckError& error)
+    catch (const NodeValidationError& error)
     {
         EXPECT_HAS_SUBSTRING(error.what(),
-                             "Window shape after padding is larger than the spatial dimensions");
+                             "Window after dilation has dimension (dim: 9) larger than the data "
+                             "shape after padding (dim: 8) at axis 0");
     }
     catch (...)
     {
         FAIL() << "Deduced type check failed for unexpected reason";
     }
+}
+
+TEST(type_prop, avg_pool_larger_than_pre_padding_but_fits_in_post_padding)
+{
+    auto param = make_shared<op::Parameter>(element::f32, Shape{6, 2, 8, 8});
+    Shape window_shape{9, 9};
+    Strides window_strides{1, 1};
+    Shape padding_below{0, 0};
+    Shape padding_above{1, 1};
+    auto avg_pool =
+        make_shared<op::AvgPool>(param, window_shape, window_strides, padding_below, padding_above);
+
+    ASSERT_EQ(avg_pool->get_output_element_type(0), element::f32);
+    ASSERT_EQ(avg_pool->get_output_shape(0), (Shape{6, 2, 1, 1}));
 }
 
 TEST(type_prop, avg_pool_invalid_movement_stride_0)
@@ -6186,9 +6522,10 @@ TEST(type_prop, avg_pool_invalid_movement_stride_0)
         // Should have thrown, so fail if it didn't
         FAIL() << "Invalid input with 0-length movement stride axis not detected";
     }
-    catch (const TypeCheckError& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_HAS_SUBSTRING(error.what(), "Window movement strides dimension 0 has zero length");
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             "Window strides (Strides{0, 1}) has zero dimension at axis 0");
     }
     catch (...)
     {
@@ -6297,10 +6634,9 @@ TEST(type_prop, pad_deduce_element_type_mismatch)
         // Should have thrown, so fail if it didn't
         FAIL() << "Element tpye mismatch not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(),
-                  std::string("Pad argument tensor and padding value element types do not match"));
+        EXPECT_HAS_SUBSTRING(error.what(), std::string("Argument element types do not match"));
     }
     catch (...)
     {
@@ -6324,9 +6660,10 @@ TEST(type_prop, pad_deduce_nonscalar_pad_value)
         // Should have thrown, so fail if it didn't
         FAIL() << "Non-scalar pad value not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(), std::string("Padding value for pad is not a scalar"));
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             std::string("Argument for padding value is not a scalar"));
     }
     catch (...)
     {
@@ -6350,10 +6687,11 @@ TEST(type_prop, pad_deduce_below_padding_wrong_rank)
         // Should have thrown, so fail if it didn't
         FAIL() << "Wrong below-padding rank not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(),
-                  std::string("Pad rank for below-padding does not match rank of argument tensor"));
+        EXPECT_HAS_SUBSTRING(
+            error.what(),
+            std::string("Rank for padding below does not match the rank of the data argument"));
     }
     catch (...)
     {
@@ -6377,10 +6715,11 @@ TEST(type_prop, pad_deduce_above_padding_wrong_rank)
         // Should have thrown, so fail if it didn't
         FAIL() << "Wrong above-padding rank not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(),
-                  std::string("Pad rank for above-padding does not match rank of argument tensor"));
+        EXPECT_HAS_SUBSTRING(
+            error.what(),
+            std::string("Rank for padding above does not match the rank of the data argument"));
     }
     catch (...)
     {
@@ -6404,11 +6743,11 @@ TEST(type_prop, pad_deduce_interior_padding_wrong_rank)
         // Should have thrown, so fail if it didn't
         FAIL() << "Wrong interior padding rank not detected";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(
+        EXPECT_HAS_SUBSTRING(
             error.what(),
-            std::string("Pad rank for interior padding does not match rank of argument tensor"));
+            std::string("Rank for interior padding does not match the rank of the data argument"));
     }
     catch (...)
     {
@@ -6447,13 +6786,1577 @@ TEST(type_prop, sum_axis_oob)
         // Should have thrown, so fail if it didn't
         FAIL() << "Did not detect out-of-bound axis for sum";
     }
-    catch (const ngraph_error& error)
+    catch (const NodeValidationError& error)
     {
-        EXPECT_EQ(error.what(),
-                  std::string("Reduction axis for arithmetic reduction operator is out of bounds"));
+        EXPECT_HAS_SUBSTRING(error.what(), std::string("Reduction axis (2) is out of bounds"));
     }
     catch (...)
     {
         FAIL() << "Deduced type check failed for unexpected reason";
     }
+}
+
+TEST(type_prop, sum_partial_rank_dynamic)
+{
+    auto param = make_shared<op::Parameter>(element::f32, PartialShape::dynamic());
+    auto summation_axes = AxisSet{2385, 0, 4404}; // arbitrary
+    auto sum = make_shared<op::Sum>(param, summation_axes);
+
+    EXPECT_EQ(sum->get_output_element_type(0), element::f32);
+    EXPECT_TRUE(sum->get_output_partial_shape(0).is_dynamic());
+}
+
+TEST(type_prop, sum_partial_rank_static_dynamic_ok_result_static)
+{
+    auto param =
+        make_shared<op::Parameter>(element::f32, PartialShape{1, 2, Dimension::dynamic(), 4, 5});
+    auto summation_axes = AxisSet{2, 3};
+    auto sum = make_shared<op::Sum>(param, summation_axes);
+
+    EXPECT_EQ(sum->get_output_element_type(0), element::f32);
+    EXPECT_EQ(sum->get_shape(), (Shape{1, 2, 5}));
+}
+
+TEST(type_prop, sum_partial_rank_static_dynamic_ok_result_dynamic)
+{
+    auto param = make_shared<op::Parameter>(
+        element::f32, PartialShape{1, 2, Dimension::dynamic(), 4, Dimension::dynamic()});
+    auto summation_axes = AxisSet{2, 3};
+    auto sum = make_shared<op::Sum>(param, summation_axes);
+
+    EXPECT_EQ(sum->get_output_element_type(0), element::f32);
+    EXPECT_TRUE(
+        sum->get_output_partial_shape(0).same_scheme(PartialShape{1, 2, Dimension::dynamic()}));
+}
+
+TEST(type_prop, sum_partial_rank_static_dynamic_axes_oob)
+{
+    auto param = make_shared<op::Parameter>(
+        element::f32, PartialShape{1, 2, Dimension::dynamic(), 4, Dimension::dynamic()});
+    auto summation_axes = AxisSet{2, 5, 1};
+
+    try
+    {
+        auto sum = make_shared<op::Sum>(param, summation_axes);
+        // Should have thrown, so fail if it didn't
+        FAIL() << "Did not detect out-of-bound axis for sum (rank-static dynamic input)";
+    }
+    catch (const NodeValidationError& error)
+    {
+        EXPECT_HAS_SUBSTRING(error.what(), std::string("Reduction axis (5) is out of bounds"));
+    }
+    catch (...)
+    {
+        FAIL() << "Deduced type check failed for unexpected reason";
+    }
+}
+
+TEST(type_prop, index_reduction_scalar)
+{
+    auto a = make_shared<op::Parameter>(element::f32, Shape{});
+
+    try
+    {
+        auto argmin = make_shared<op::ArgMin>(a, 0, element::i32);
+        FAIL() << "ArgMin c-tor should throw for scalar shapes";
+    }
+    catch (const NodeValidationError& error)
+    {
+        EXPECT_HAS_SUBSTRING(error.what(), "Argument rank must be at least 1");
+    }
+    catch (...)
+    {
+        FAIL() << "Deduced type check failed for unexpected reason";
+    }
+}
+
+TEST(type_prop, index_reduction_invalid_rank)
+{
+    auto a = make_shared<op::Parameter>(element::f32, Shape{2, 2});
+
+    try
+    {
+        auto argmin = make_shared<op::ArgMin>(a, 2, element::i32);
+        FAIL() << "ArgMin c-tor should throw for axis out of bounds";
+    }
+    catch (const NodeValidationError& error)
+    {
+        EXPECT_HAS_SUBSTRING(error.what(), "is greater than rank of");
+    }
+    catch (...)
+    {
+        FAIL() << "Deduced type check failed for unexpected reason";
+    }
+}
+
+TEST(type_prop, index_reduction_invalid_index_type)
+{
+    auto a = make_shared<op::Parameter>(element::f32, Shape{2, 2});
+
+    try
+    {
+        auto argmin = make_shared<op::ArgMin>(a, 1, element::f32);
+        FAIL() << "ArgMin c-tor should throw for invalid index type";
+    }
+    catch (const NodeValidationError& error)
+    {
+        EXPECT_HAS_SUBSTRING(error.what(), "Index element type must be");
+    }
+    catch (...)
+    {
+        FAIL() << "Deduced type check failed for unexpected reason";
+    }
+}
+
+TEST(type_prop, topk_invalid_rank)
+{
+    auto a = make_shared<op::Parameter>(element::f32, Shape{});
+
+    try
+    {
+        auto topk = make_shared<op::TopK>(a, 0, element::i32, 1, true);
+        FAIL() << "TopK c-tor should throw for scalar shapes";
+    }
+    catch (const NodeValidationError& error)
+    {
+        EXPECT_HAS_SUBSTRING(error.what(), "Input Tensor's rank must be greater than 0");
+    }
+    catch (...)
+    {
+        FAIL() << "Deduced type check failed for unexpected reason";
+    }
+}
+
+TEST(type_prop, topk_invalid_top_k)
+{
+    auto a = make_shared<op::Parameter>(element::f32, Shape{2, 2});
+
+    try
+    {
+        auto topk = make_shared<op::TopK>(a, 2, element::i32, 1, true);
+        FAIL() << "TopK c-tor should throw for invalid top k axis";
+    }
+    catch (const NodeValidationError& error)
+    {
+        EXPECT_HAS_SUBSTRING(error.what(), "TopK axis must be less than rank");
+    }
+    catch (...)
+    {
+        FAIL() << "Deduced type check failed for unexpected reason";
+    }
+}
+
+TEST(type_prop, topk_invalid_index_type)
+{
+    auto a = make_shared<op::Parameter>(element::f32, Shape{2, 2});
+
+    try
+    {
+        auto topk = make_shared<op::TopK>(a, 0, element::f32, 1, true);
+        FAIL() << "TopK c-tor should throw for invalid index element type";
+    }
+    catch (const NodeValidationError& error)
+    {
+        EXPECT_HAS_SUBSTRING(error.what(), "Index element type must be i64 or i32");
+    }
+    catch (...)
+    {
+        FAIL() << "Deduced type check failed for unexpected reason";
+    }
+}
+
+TEST(type_prop, topk_invalid_k)
+{
+    auto a = make_shared<op::Parameter>(element::f32, Shape{2, 2});
+
+    try
+    {
+        auto topk = make_shared<op::TopK>(a, 0, element::i32, 3, true);
+        FAIL() << "TopK c-tor should throw for invalid K";
+    }
+    catch (const NodeValidationError& error)
+    {
+        EXPECT_HAS_SUBSTRING(error.what(), "K should not exceed TopK axis length");
+    }
+    catch (...)
+    {
+        FAIL() << "Deduced type check failed for unexpected reason";
+    }
+}
+
+TEST(type_prop, param_partial_rank_dynamic)
+{
+    auto a = make_shared<op::Parameter>(element::f32, PartialShape::dynamic());
+
+    auto& pshape = a->get_output_partial_shape(0);
+
+    ASSERT_TRUE(pshape.is_dynamic());
+    ASSERT_TRUE(pshape.rank().is_dynamic());
+}
+
+TEST(type_prop, param_partial_rank_static)
+{
+    auto a = make_shared<op::Parameter>(element::f32, PartialShape{2, Dimension::dynamic(), 3, 4});
+
+    auto& pshape = a->get_output_partial_shape(0);
+
+    ASSERT_TRUE(pshape.is_dynamic());
+    ASSERT_EQ(size_t(pshape.rank()), 4);
+    ASSERT_TRUE(pshape[0].is_static() && size_t(pshape[0]) == 2);
+    ASSERT_TRUE(pshape[1].is_dynamic());
+    ASSERT_TRUE(pshape[2].is_static() && size_t(pshape[2]) == 3);
+    ASSERT_TRUE(pshape[3].is_static() && size_t(pshape[3]) == 4);
+}
+
+TEST(type_prop, binary_elementwise_arithmetic_both_dynamic)
+{
+    auto a = make_shared<op::Parameter>(element::f32, PartialShape::dynamic());
+    auto b = make_shared<op::Parameter>(element::f32, PartialShape::dynamic());
+    auto add = make_shared<op::Add>(a, b);
+
+    ASSERT_TRUE(add->get_output_partial_shape(0).rank().is_dynamic());
+}
+
+TEST(type_prop, binary_elementwise_arithmetic_left_rank_dynamic_right_static)
+{
+    auto a = make_shared<op::Parameter>(element::f32, PartialShape::dynamic());
+    auto b = make_shared<op::Parameter>(element::f32, Shape{1, 2, 3});
+    auto add = make_shared<op::Add>(a, b);
+
+    ASSERT_TRUE(add->get_output_partial_shape(0).is_static());
+    ASSERT_EQ(add->get_shape(), (Shape{1, 2, 3}));
+}
+
+TEST(type_prop, binary_elementwise_arithmetic_left_static_right_rank_dynamic)
+{
+    auto a = make_shared<op::Parameter>(element::f32, Shape{1, 2, 3});
+    auto b = make_shared<op::Parameter>(element::f32, PartialShape::dynamic());
+    auto add = make_shared<op::Add>(a, b);
+
+    ASSERT_TRUE(add->get_output_partial_shape(0).is_static());
+    ASSERT_EQ(add->get_shape(), (Shape{1, 2, 3}));
+}
+
+TEST(type_prop, binary_elementwise_arithmetic_left_rank_static_dynamic_right_rank_dynamic)
+{
+    auto a = make_shared<op::Parameter>(element::f32, PartialShape{1, Dimension::dynamic(), 3});
+    auto b = make_shared<op::Parameter>(element::f32, PartialShape::dynamic());
+    auto add = make_shared<op::Add>(a, b);
+
+    ASSERT_TRUE(add->get_output_partial_shape(0).rank().is_static());
+    ASSERT_TRUE(add->get_output_partial_shape(0).is_dynamic());
+    ASSERT_TRUE(
+        add->get_output_partial_shape(0).same_scheme(PartialShape{1, Dimension::dynamic(), 3}));
+}
+
+TEST(type_prop, binary_elementwise_arithmetic_left_rank_dynamic_right_rank_static_dynamic)
+{
+    auto a = make_shared<op::Parameter>(element::f32, PartialShape::dynamic());
+    auto b = make_shared<op::Parameter>(element::f32, PartialShape{1, Dimension::dynamic(), 3});
+    auto add = make_shared<op::Add>(a, b);
+
+    ASSERT_TRUE(add->get_output_partial_shape(0).rank().is_static());
+    ASSERT_TRUE(add->get_output_partial_shape(0).is_dynamic());
+    ASSERT_TRUE(
+        add->get_output_partial_shape(0).same_scheme(PartialShape{1, Dimension::dynamic(), 3}));
+}
+
+TEST(type_prop,
+     binary_elementwise_arithmetic_left_rank_static_dynamic_right_rank_static_dynamic_result_static)
+{
+    auto a = make_shared<op::Parameter>(element::f32, PartialShape{1, Dimension::dynamic(), 3});
+    auto b = make_shared<op::Parameter>(element::f32, PartialShape{1, 2, Dimension::dynamic()});
+    auto add = make_shared<op::Add>(a, b);
+
+    ASSERT_TRUE(add->get_output_partial_shape(0).is_static());
+    ASSERT_EQ(add->get_shape(), (Shape{1, 2, 3}));
+}
+
+TEST(
+    type_prop,
+    binary_elementwise_arithmetic_left_rank_static_dynamic_right_rank_static_dynamic_result_rank_static_dynamic)
+{
+    auto a = make_shared<op::Parameter>(
+        element::f32, PartialShape{1, Dimension::dynamic(), Dimension::dynamic()});
+    auto b = make_shared<op::Parameter>(element::f32, PartialShape{1, 2, Dimension::dynamic()});
+    auto add = make_shared<op::Add>(a, b);
+
+    ASSERT_TRUE(add->get_output_partial_shape(0).rank().is_static());
+    ASSERT_TRUE(add->get_output_partial_shape(0).is_dynamic());
+    ASSERT_TRUE(
+        add->get_output_partial_shape(0).same_scheme(PartialShape{1, 2, Dimension::dynamic()}));
+}
+
+TEST(type_prop, binary_elementwise_arithmetic_left_static_right_rank_static_dynamic)
+{
+    auto a = make_shared<op::Parameter>(element::f32, PartialShape{1, 2, 3});
+    auto b = make_shared<op::Parameter>(element::f32, PartialShape{1, 2, Dimension::dynamic()});
+    auto add = make_shared<op::Add>(a, b);
+
+    ASSERT_TRUE(add->get_output_partial_shape(0).is_static());
+    ASSERT_EQ(add->get_shape(), (Shape{1, 2, 3}));
+}
+
+TEST(type_prop, binary_elementwise_arithmetic_left_rank_static_dynamic_right_static)
+{
+    auto a = make_shared<op::Parameter>(element::f32, PartialShape{1, 2, Dimension::dynamic()});
+    auto b = make_shared<op::Parameter>(element::f32, PartialShape{1, 2, 3});
+    auto add = make_shared<op::Add>(a, b);
+
+    ASSERT_TRUE(add->get_output_partial_shape(0).is_static());
+    ASSERT_EQ(add->get_shape(), (Shape{1, 2, 3}));
+}
+
+TEST(type_prop, binary_elementwise_arithmetic_left_rank_static_dynamic_inconsistent)
+{
+    auto a = make_shared<op::Parameter>(element::f32, PartialShape{1, 2, Dimension::dynamic()});
+    auto b = make_shared<op::Parameter>(element::f32, PartialShape{1, 3, 3});
+
+    try
+    {
+        auto add = make_shared<op::Add>(a, b);
+        FAIL() << "Inconsistent partial shapes not detected";
+    }
+    catch (const NodeValidationError& error)
+    {
+        EXPECT_HAS_SUBSTRING(error.what(), "Argument shapes are inconsistent");
+    }
+    catch (...)
+    {
+        FAIL() << "Deduced type check failed for unexpected reason";
+    }
+}
+
+TEST(type_prop, binary_elementwise_arithmetic_right_rank_static_dynamic_inconsistent)
+{
+    auto a = make_shared<op::Parameter>(element::f32, PartialShape{1, 3, 3});
+    auto b = make_shared<op::Parameter>(element::f32, PartialShape{1, 2, Dimension::dynamic()});
+
+    try
+    {
+        auto add = make_shared<op::Add>(a, b);
+        FAIL() << "Inconsistent partial shapes not detected";
+    }
+    catch (const NodeValidationError& error)
+    {
+        EXPECT_HAS_SUBSTRING(error.what(), "Argument shapes are inconsistent");
+    }
+    catch (...)
+    {
+        FAIL() << "Deduced type check failed for unexpected reason";
+    }
+}
+
+TEST(type_prop, binary_elementwise_arithmetic_both_rank_static_dynamic_inconsistent)
+{
+    auto a = make_shared<op::Parameter>(element::f32, PartialShape{Dimension::dynamic(), 3, 3});
+    auto b = make_shared<op::Parameter>(element::f32, PartialShape{1, 2, Dimension::dynamic()});
+
+    try
+    {
+        auto add = make_shared<op::Add>(a, b);
+        FAIL() << "Inconsistent partial shapes not detected";
+    }
+    catch (const NodeValidationError& error)
+    {
+        EXPECT_HAS_SUBSTRING(error.what(), "Argument shapes are inconsistent");
+    }
+    catch (...)
+    {
+        FAIL() << "Deduced type check failed for unexpected reason";
+    }
+}
+
+TEST(type_prop, binary_elementwise_arithmetic_left_rank_static_dynamic_different_rank)
+{
+    auto a = make_shared<op::Parameter>(element::f32, PartialShape{1, 2, Dimension::dynamic()});
+    auto b = make_shared<op::Parameter>(element::f32, PartialShape{1, 2, 3, 4});
+
+    try
+    {
+        auto add = make_shared<op::Add>(a, b);
+        FAIL() << "Inconsistent partial shapes not detected";
+    }
+    catch (const NodeValidationError& error)
+    {
+        EXPECT_HAS_SUBSTRING(error.what(), "Argument shapes are inconsistent");
+    }
+    catch (...)
+    {
+        FAIL() << "Deduced type check failed for unexpected reason";
+    }
+}
+
+TEST(type_prop, binary_elementwise_arithmetic_right_rank_static_dynamic_different_rank)
+{
+    auto a = make_shared<op::Parameter>(element::f32, PartialShape{1, 2, 3, 4});
+    auto b = make_shared<op::Parameter>(element::f32, PartialShape{1, 2, Dimension::dynamic()});
+
+    try
+    {
+        auto add = make_shared<op::Add>(a, b);
+        FAIL() << "Inconsistent partial shapes not detected";
+    }
+    catch (const NodeValidationError& error)
+    {
+        EXPECT_HAS_SUBSTRING(error.what(), "Argument shapes are inconsistent");
+    }
+    catch (...)
+    {
+        FAIL() << "Deduced type check failed for unexpected reason";
+    }
+}
+
+TEST(type_prop, binary_elementwise_arithmetic_both_rank_static_dynamic_different_rank)
+{
+    auto a = make_shared<op::Parameter>(element::f32, PartialShape{1, Dimension::dynamic(), 3, 4});
+    auto b = make_shared<op::Parameter>(element::f32, PartialShape{1, 2, Dimension::dynamic()});
+
+    try
+    {
+        auto add = make_shared<op::Add>(a, b);
+        FAIL() << "Inconsistent partial shapes not detected";
+    }
+    catch (const NodeValidationError& error)
+    {
+        EXPECT_HAS_SUBSTRING(error.what(), "Argument shapes are inconsistent");
+    }
+    catch (...)
+    {
+        FAIL() << "Deduced type check failed for unexpected reason";
+    }
+}
+
+TEST(type_prop, binary_elementwise_arithmetic_both_et_dynamic)
+{
+    auto a = make_shared<op::Parameter>(element::dynamic, Shape{1, 2, 3, 4});
+    auto b = make_shared<op::Parameter>(element::dynamic, Shape{1, 2, 3, 4});
+    auto add = make_shared<op::Add>(a, b);
+
+    ASSERT_TRUE(add->get_output_element_type(0).is_dynamic());
+}
+
+TEST(type_prop, binary_elementwise_arithmetic_left_et_dynamic)
+{
+    auto a = make_shared<op::Parameter>(element::dynamic, Shape{1, 2, 3, 4});
+    auto b = make_shared<op::Parameter>(element::u32, Shape{1, 2, 3, 4});
+    auto add = make_shared<op::Add>(a, b);
+
+    ASSERT_EQ(add->get_output_element_type(0), element::u32);
+}
+
+TEST(type_prop, binary_elementwise_arithmetic_right_et_dynamic)
+{
+    auto a = make_shared<op::Parameter>(element::i64, Shape{1, 2, 3, 4});
+    auto b = make_shared<op::Parameter>(element::dynamic, Shape{1, 2, 3, 4});
+    auto add = make_shared<op::Add>(a, b);
+
+    ASSERT_EQ(add->get_output_element_type(0), element::i64);
+}
+
+TEST(type_prop, logic_arith_compare_partial_et)
+{
+    auto test_logic = [](element::Type et0, element::Type et1) -> std::shared_ptr<Node> {
+        auto param0 = std::make_shared<op::Parameter>(et0, Shape{1, 2, 3});
+        auto param1 = std::make_shared<op::Parameter>(et1, Shape{1, 2, 3});
+        return std::make_shared<op::And>(param0, param1);
+    };
+
+    auto test_arith = [](element::Type et0, element::Type et1) -> std::shared_ptr<Node> {
+        auto param0 = std::make_shared<op::Parameter>(et0, Shape{1, 2, 3});
+        auto param1 = std::make_shared<op::Parameter>(et1, Shape{1, 2, 3});
+        return std::make_shared<op::Add>(param0, param1);
+    };
+
+    auto test_compare = [](element::Type et0, element::Type et1) -> std::shared_ptr<Node> {
+        auto param0 = std::make_shared<op::Parameter>(et0, Shape{1, 2, 3});
+        auto param1 = std::make_shared<op::Parameter>(et1, Shape{1, 2, 3});
+        return std::make_shared<op::Greater>(param0, param1);
+    };
+
+    auto test_not = [](element::Type et) -> std::shared_ptr<Node> {
+        auto param = std::make_shared<op::Parameter>(et, Shape{1, 2, 3});
+        return std::make_shared<op::Not>(param);
+    };
+
+    // Logical ops:
+    //
+    // int int -> !
+    // int boo -> !
+    // int dyn -> !
+    // boo int -> !
+    // boo boo -> boo
+    // boo dyn -> boo
+    // dyn int -> !
+    // dyn boo -> boo
+    // dyn dyn -> boo
+    ASSERT_ANY_THROW({ test_logic(element::i32, element::i32); });
+    ASSERT_ANY_THROW({ test_logic(element::i32, element::boolean); });
+    ASSERT_ANY_THROW({ test_logic(element::i32, element::dynamic); });
+    ASSERT_ANY_THROW({ test_logic(element::boolean, element::i32); });
+    ASSERT_EQ(test_logic(element::boolean, element::boolean)->get_element_type(), element::boolean);
+    ASSERT_EQ(test_logic(element::boolean, element::dynamic)->get_element_type(), element::boolean);
+    ASSERT_ANY_THROW({ test_logic(element::dynamic, element::i32); });
+    ASSERT_EQ(test_logic(element::dynamic, element::boolean)->get_element_type(), element::boolean);
+    ASSERT_EQ(test_logic(element::dynamic, element::dynamic)->get_element_type(), element::boolean);
+
+    // Arith ops:
+    //
+    // int int -> int
+    // int boo -> !
+    // int dyn -> int
+    // boo int -> !
+    // boo boo -> !
+    // boo dyn -> !
+    // dyn int -> int
+    // dyn boo -> !
+    // dyn dyn -> dyn
+    ASSERT_EQ(test_arith(element::i32, element::i32)->get_element_type(), element::i32);
+    ASSERT_ANY_THROW({ test_arith(element::i32, element::boolean); });
+    ASSERT_EQ(test_arith(element::i32, element::dynamic)->get_element_type(), element::i32);
+    ASSERT_ANY_THROW({ test_arith(element::boolean, element::i32); });
+    ASSERT_ANY_THROW({ test_arith(element::boolean, element::boolean); });
+    ASSERT_ANY_THROW({ test_arith(element::boolean, element::dynamic); });
+    ASSERT_EQ(test_arith(element::dynamic, element::i32)->get_element_type(), element::i32);
+    ASSERT_ANY_THROW({ test_arith(element::dynamic, element::boolean); });
+    ASSERT_EQ(test_arith(element::dynamic, element::dynamic)->get_element_type(), element::dynamic);
+
+    // Comparison ops:
+    //
+    // int int -> boo
+    // int boo -> !
+    // int dyn -> boo
+    // boo int -> !
+    // boo boo -> boo
+    // boo dyn -> boo
+    // dyn int -> boo
+    // dyn boo -> boo
+    // dyn dyn -> boo
+    ASSERT_EQ(test_compare(element::i32, element::i32)->get_element_type(), element::boolean);
+    ASSERT_ANY_THROW({ test_compare(element::i32, element::boolean); });
+    ASSERT_EQ(test_compare(element::i32, element::dynamic)->get_element_type(), element::boolean);
+    ASSERT_ANY_THROW({ test_compare(element::boolean, element::i32); });
+    ASSERT_EQ(test_compare(element::boolean, element::boolean)->get_element_type(),
+              element::boolean);
+    ASSERT_EQ(test_compare(element::boolean, element::dynamic)->get_element_type(),
+              element::boolean);
+    ASSERT_EQ(test_compare(element::dynamic, element::i32)->get_element_type(), element::boolean);
+    ASSERT_EQ(test_compare(element::dynamic, element::boolean)->get_element_type(),
+              element::boolean);
+    ASSERT_EQ(test_compare(element::dynamic, element::dynamic)->get_element_type(),
+              element::boolean);
+
+    // Logical negation op:
+    //
+    // Current behavior:
+    // int -> int
+    // boo -> boo
+    // dyn -> dyn
+    //
+    // TODO(amprocte): I believe the behavior should actually be:
+    // int -> !
+    // boo -> boo
+    // dyn -> boo
+    ASSERT_EQ(test_not(element::i32)->get_element_type(), element::i32);
+    ASSERT_EQ(test_not(element::boolean)->get_element_type(), element::boolean);
+    ASSERT_EQ(test_not(element::dynamic)->get_element_type(), element::dynamic);
+}
+
+TEST(type_prop, get_output_element_partial_et_dynamic)
+{
+    auto a = make_shared<op::Parameter>(element::dynamic, Shape{1, 2, 3, 4});
+    auto b = make_shared<op::Parameter>(element::dynamic, Shape{1, 2, 3, 4});
+    auto add = make_shared<op::Add>(a, b);
+    auto goe = make_shared<op::GetOutputElement>(add, 0);
+
+    ASSERT_EQ(goe->get_output_element_type(0), element::dynamic);
+    ASSERT_EQ(goe->get_output_shape(0), (Shape{1, 2, 3, 4}));
+}
+
+TEST(type_prop, get_output_element_partial_rank_dynamic)
+{
+    auto a = make_shared<op::Parameter>(element::i32, PartialShape::dynamic());
+    auto b = make_shared<op::Parameter>(element::i32, PartialShape::dynamic());
+    auto add = make_shared<op::Add>(a, b);
+    auto goe = make_shared<op::GetOutputElement>(add, 0);
+
+    ASSERT_EQ(goe->get_output_element_type(0), element::i32);
+    ASSERT_TRUE(goe->get_output_partial_shape(0).rank().is_dynamic());
+}
+
+TEST(type_prop, get_output_element_partial_rank_static_dynamic)
+{
+    auto a = make_shared<op::Parameter>(
+        element::i32, PartialShape{Dimension::dynamic(), 2, 3, Dimension::dynamic()});
+    auto b = make_shared<op::Parameter>(
+        element::i32, PartialShape{Dimension::dynamic(), 2, Dimension::dynamic(), 4});
+    auto add = make_shared<op::Add>(a, b);
+    auto goe = make_shared<op::GetOutputElement>(add, 0);
+
+    ASSERT_EQ(goe->get_output_element_type(0), element::i32);
+    ASSERT_TRUE(
+        goe->get_output_partial_shape(0).same_scheme(PartialShape{Dimension::dynamic(), 2, 3, 4}));
+}
+
+TEST(type_prop, quantize_f32_to_i8_nchw_per_channel_ok)
+{
+    Shape batch_shape{64, 3, 480, 640};
+    Shape scale_shape{3};
+    Shape offset_shape{3};
+    element::Type unquantized_type = element::f32;
+    element::Type quantized_type = element::i8;
+    element::Type batch_type = unquantized_type;
+    element::Type scale_type = unquantized_type;
+    element::Type offset_type = quantized_type;
+    AxisSet axes{1};
+    auto round_mode = op::Quantize::RoundMode::HALF_AWAY_FROM_ZERO;
+
+    auto batch = make_shared<op::Parameter>(batch_type, batch_shape);
+    auto scale = make_shared<op::Parameter>(scale_type, scale_shape);
+    auto offset = make_shared<op::Parameter>(offset_type, offset_shape);
+    auto quant = make_shared<op::Quantize>(batch, scale, offset, quantized_type, axes, round_mode);
+
+    ASSERT_EQ(quant->get_output_element_type(0), quantized_type);
+    ASSERT_EQ(quant->get_output_shape(0), batch_shape);
+}
+
+TEST(type_prop, quantize_f32_to_i8_nchw_per_image_ok)
+{
+    Shape batch_shape{64, 3, 480, 640};
+    Shape scale_shape{64};
+    Shape offset_shape{64};
+    element::Type unquantized_type = element::f32;
+    element::Type quantized_type = element::i8;
+    element::Type batch_type = unquantized_type;
+    element::Type scale_type = unquantized_type;
+    element::Type offset_type = quantized_type;
+    AxisSet axes{0};
+    auto round_mode = op::Quantize::RoundMode::HALF_AWAY_FROM_ZERO;
+
+    auto batch = make_shared<op::Parameter>(batch_type, batch_shape);
+    auto scale = make_shared<op::Parameter>(scale_type, scale_shape);
+    auto offset = make_shared<op::Parameter>(offset_type, offset_shape);
+    auto quant = make_shared<op::Quantize>(batch, scale, offset, quantized_type, axes, round_mode);
+
+    ASSERT_EQ(quant->get_output_element_type(0), quantized_type);
+    ASSERT_EQ(quant->get_output_shape(0), batch_shape);
+}
+
+TEST(type_prop, quantize_f32_to_i8_nchw_per_row_ok)
+{
+    Shape batch_shape{64, 3, 480, 640};
+    Shape scale_shape{480};
+    Shape offset_shape{480};
+    element::Type unquantized_type = element::f32;
+    element::Type quantized_type = element::i8;
+    element::Type batch_type = unquantized_type;
+    element::Type scale_type = unquantized_type;
+    element::Type offset_type = quantized_type;
+    AxisSet axes{2};
+    auto round_mode = op::Quantize::RoundMode::HALF_AWAY_FROM_ZERO;
+
+    auto batch = make_shared<op::Parameter>(batch_type, batch_shape);
+    auto scale = make_shared<op::Parameter>(scale_type, scale_shape);
+    auto offset = make_shared<op::Parameter>(offset_type, offset_shape);
+    auto quant = make_shared<op::Quantize>(batch, scale, offset, quantized_type, axes, round_mode);
+
+    ASSERT_EQ(quant->get_output_element_type(0), quantized_type);
+    ASSERT_EQ(quant->get_output_shape(0), batch_shape);
+}
+
+TEST(type_prop, quantize_f32_to_i8_nchw_per_image_channel_ok)
+{
+    Shape batch_shape{64, 3, 480, 640};
+    Shape scale_shape{64, 3};
+    Shape offset_shape{64, 3};
+    element::Type unquantized_type = element::f32;
+    element::Type quantized_type = element::i8;
+    element::Type batch_type = unquantized_type;
+    element::Type scale_type = unquantized_type;
+    element::Type offset_type = quantized_type;
+    AxisSet axes{0, 1};
+    auto round_mode = op::Quantize::RoundMode::HALF_AWAY_FROM_ZERO;
+
+    auto batch = make_shared<op::Parameter>(batch_type, batch_shape);
+    auto scale = make_shared<op::Parameter>(scale_type, scale_shape);
+    auto offset = make_shared<op::Parameter>(offset_type, offset_shape);
+    auto quant = make_shared<op::Quantize>(batch, scale, offset, quantized_type, axes, round_mode);
+
+    ASSERT_EQ(quant->get_output_element_type(0), quantized_type);
+    ASSERT_EQ(quant->get_output_shape(0), batch_shape);
+}
+
+TEST(type_prop, quantize_f32_to_i8_nchw_whole_batch_ok)
+{
+    Shape batch_shape{64, 3, 480, 640};
+    Shape scale_shape{};
+    Shape offset_shape{};
+    element::Type unquantized_type = element::f32;
+    element::Type quantized_type = element::i8;
+    element::Type batch_type = unquantized_type;
+    element::Type scale_type = unquantized_type;
+    element::Type offset_type = quantized_type;
+    AxisSet axes{};
+    auto round_mode = op::Quantize::RoundMode::HALF_AWAY_FROM_ZERO;
+
+    auto batch = make_shared<op::Parameter>(batch_type, batch_shape);
+    auto scale = make_shared<op::Parameter>(scale_type, scale_shape);
+    auto offset = make_shared<op::Parameter>(offset_type, offset_shape);
+    auto quant = make_shared<op::Quantize>(batch, scale, offset, quantized_type, axes, round_mode);
+
+    ASSERT_EQ(quant->get_output_element_type(0), quantized_type);
+    ASSERT_EQ(quant->get_output_shape(0), batch_shape);
+}
+
+TEST(type_prop, quantize_f64_to_i8_ok)
+{
+    Shape batch_shape{64, 3, 480, 640};
+    Shape scale_shape{};
+    Shape offset_shape{};
+    element::Type unquantized_type = element::f64;
+    element::Type quantized_type = element::i8;
+    element::Type batch_type = unquantized_type;
+    element::Type scale_type = unquantized_type;
+    element::Type offset_type = quantized_type;
+    AxisSet axes{};
+    auto round_mode = op::Quantize::RoundMode::HALF_AWAY_FROM_ZERO;
+
+    auto batch = make_shared<op::Parameter>(batch_type, batch_shape);
+    auto scale = make_shared<op::Parameter>(scale_type, scale_shape);
+    auto offset = make_shared<op::Parameter>(offset_type, offset_shape);
+    auto quant = make_shared<op::Quantize>(batch, scale, offset, quantized_type, axes, round_mode);
+
+    ASSERT_EQ(quant->get_output_element_type(0), quantized_type);
+    ASSERT_EQ(quant->get_output_shape(0), batch_shape);
+}
+
+TEST(type_prop, quantize_f64_to_u8_ok)
+{
+    Shape batch_shape{64, 3, 480, 640};
+    Shape scale_shape{};
+    Shape offset_shape{};
+    element::Type unquantized_type = element::f64;
+    element::Type quantized_type = element::u8;
+    element::Type batch_type = unquantized_type;
+    element::Type scale_type = unquantized_type;
+    element::Type offset_type = quantized_type;
+    AxisSet axes{};
+    auto round_mode = op::Quantize::RoundMode::HALF_AWAY_FROM_ZERO;
+
+    auto batch = make_shared<op::Parameter>(batch_type, batch_shape);
+    auto scale = make_shared<op::Parameter>(scale_type, scale_shape);
+    auto offset = make_shared<op::Parameter>(offset_type, offset_shape);
+    auto quant = make_shared<op::Quantize>(batch, scale, offset, quantized_type, axes, round_mode);
+
+    ASSERT_EQ(quant->get_output_element_type(0), quantized_type);
+    ASSERT_EQ(quant->get_output_shape(0), batch_shape);
+}
+
+TEST(type_prop, quantize_i8_to_u8_fails)
+{
+    Shape batch_shape{64, 3, 480, 640};
+    Shape scale_shape{};
+    Shape offset_shape{};
+    element::Type unquantized_type = element::i8;
+    element::Type quantized_type = element::u8;
+    element::Type batch_type = unquantized_type;
+    element::Type scale_type = unquantized_type;
+    element::Type offset_type = quantized_type;
+    AxisSet axes{};
+    auto round_mode = op::Quantize::RoundMode::HALF_AWAY_FROM_ZERO;
+
+    auto batch = make_shared<op::Parameter>(batch_type, batch_shape);
+    auto scale = make_shared<op::Parameter>(scale_type, scale_shape);
+    auto offset = make_shared<op::Parameter>(offset_type, offset_shape);
+
+    try
+    {
+        auto quant =
+            make_shared<op::Quantize>(batch, scale, offset, quantized_type, axes, round_mode);
+        FAIL() << "Attempt to quantize non-floating point type not detected";
+    }
+    catch (const NodeValidationError& error)
+    {
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             "Input element type (element::Type{8, 0, 1, 1, \"int8_t\"}) must be a "
+                             "floating point number");
+    }
+    catch (...)
+    {
+        FAIL() << "Deduced type check failed for unexpected reason";
+    }
+}
+
+TEST(type_prop, quantize_f32_to_f32_fails)
+{
+    Shape batch_shape{64, 3, 480, 640};
+    Shape scale_shape{};
+    Shape offset_shape{};
+    element::Type unquantized_type = element::f32;
+    element::Type quantized_type = element::f32;
+    element::Type batch_type = unquantized_type;
+    element::Type scale_type = unquantized_type;
+    element::Type offset_type = quantized_type;
+    AxisSet axes{};
+    auto round_mode = op::Quantize::RoundMode::HALF_AWAY_FROM_ZERO;
+
+    auto batch = make_shared<op::Parameter>(batch_type, batch_shape);
+    auto scale = make_shared<op::Parameter>(scale_type, scale_shape);
+    auto offset = make_shared<op::Parameter>(offset_type, offset_shape);
+
+    try
+    {
+        auto quant =
+            make_shared<op::Quantize>(batch, scale, offset, quantized_type, axes, round_mode);
+        FAIL() << "Attempt to quantize to non-quantized type not detected";
+    }
+    catch (const NodeValidationError& error)
+    {
+        EXPECT_HAS_SUBSTRING(
+            error.what(),
+            "Output element type (element::Type{32, 1, 1, 0, \"float\"}) must be a quantized type");
+    }
+    catch (...)
+    {
+        FAIL() << "Deduced type check failed for unexpected reason";
+    }
+}
+
+TEST(type_prop, quantize_batch_scale_type_mismatch_fails)
+{
+    Shape batch_shape{64, 3, 480, 640};
+    Shape scale_shape{};
+    Shape offset_shape{};
+    element::Type unquantized_type = element::f32;
+    element::Type quantized_type = element::i8;
+    element::Type batch_type = unquantized_type;
+    element::Type scale_type = element::f64;
+    element::Type offset_type = quantized_type;
+    AxisSet axes{};
+    auto round_mode = op::Quantize::RoundMode::HALF_AWAY_FROM_ZERO;
+
+    auto batch = make_shared<op::Parameter>(batch_type, batch_shape);
+    auto scale = make_shared<op::Parameter>(scale_type, scale_shape);
+    auto offset = make_shared<op::Parameter>(offset_type, offset_shape);
+
+    try
+    {
+        auto quant =
+            make_shared<op::Quantize>(batch, scale, offset, quantized_type, axes, round_mode);
+        FAIL() << "Mismatch of batch and scale element types not detected";
+    }
+    catch (const NodeValidationError& error)
+    {
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             "Scale element type (element::Type{64, 1, 1, 0, \"double\"}) must "
+                             "match input element type (element::Type{32, 1, 1, 0, \"float\"})");
+    }
+    catch (...)
+    {
+        FAIL() << "Deduced type check failed for unexpected reason";
+    }
+}
+
+TEST(type_prop, quantize_offset_type_mismatch_fails)
+{
+    Shape batch_shape{64, 3, 480, 640};
+    Shape scale_shape{};
+    Shape offset_shape{};
+    element::Type unquantized_type = element::f32;
+    element::Type quantized_type = element::i8;
+    element::Type batch_type = unquantized_type;
+    element::Type scale_type = unquantized_type;
+    element::Type offset_type = element::u8;
+    AxisSet axes{};
+    auto round_mode = op::Quantize::RoundMode::HALF_AWAY_FROM_ZERO;
+
+    auto batch = make_shared<op::Parameter>(batch_type, batch_shape);
+    auto scale = make_shared<op::Parameter>(scale_type, scale_shape);
+    auto offset = make_shared<op::Parameter>(offset_type, offset_shape);
+
+    try
+    {
+        auto quant =
+            make_shared<op::Quantize>(batch, scale, offset, quantized_type, axes, round_mode);
+        FAIL() << "Mismatch of offset element type with offset argument not detected";
+    }
+    catch (const NodeValidationError& error)
+    {
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             "Offset element type (element::Type{8, 0, 0, 1, \"uint8_t\"}) must "
+                             "match output element type (element::Type{8, 0, 1, 1, \"int8_t\"})");
+    }
+    catch (...)
+    {
+        FAIL() << "Deduced type check failed for unexpected reason";
+    }
+}
+
+TEST(type_prop, quantize_oob_axis_fails)
+{
+    Shape batch_shape{64, 3, 480, 640};
+    Shape scale_shape{320};
+    Shape offset_shape{320};
+    element::Type unquantized_type = element::f32;
+    element::Type quantized_type = element::i8;
+    element::Type batch_type = unquantized_type;
+    element::Type scale_type = unquantized_type;
+    element::Type offset_type = quantized_type;
+    AxisSet axes{3, 4};
+    auto round_mode = op::Quantize::RoundMode::HALF_AWAY_FROM_ZERO;
+
+    auto batch = make_shared<op::Parameter>(batch_type, batch_shape);
+    auto scale = make_shared<op::Parameter>(scale_type, scale_shape);
+    auto offset = make_shared<op::Parameter>(offset_type, offset_shape);
+
+    try
+    {
+        auto quant =
+            make_shared<op::Quantize>(batch, scale, offset, quantized_type, axes, round_mode);
+        FAIL() << "Out-of-bounds quantization axis not detected";
+    }
+    catch (const NodeValidationError& error)
+    {
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             "Quantization axis (4) must be less than input shape rank (4)");
+    }
+    catch (...)
+    {
+        FAIL() << "Deduced type check failed for unexpected reason";
+    }
+}
+
+TEST(type_prop, quantize_scale_shape_mismatch_same_rank_fails)
+{
+    Shape batch_shape{64, 3, 480, 640};
+    Shape scale_shape{64, 4};
+    Shape offset_shape{64, 3};
+    element::Type unquantized_type = element::f32;
+    element::Type quantized_type = element::i8;
+    element::Type batch_type = unquantized_type;
+    element::Type scale_type = unquantized_type;
+    element::Type offset_type = quantized_type;
+    AxisSet axes{0, 1};
+    auto round_mode = op::Quantize::RoundMode::HALF_AWAY_FROM_ZERO;
+
+    auto batch = make_shared<op::Parameter>(batch_type, batch_shape);
+    auto scale = make_shared<op::Parameter>(scale_type, scale_shape);
+    auto offset = make_shared<op::Parameter>(offset_type, offset_shape);
+
+    try
+    {
+        auto quant =
+            make_shared<op::Quantize>(batch, scale, offset, quantized_type, axes, round_mode);
+        FAIL() << "Mismatch of scale argument shape with required shape not detected";
+    }
+    catch (const NodeValidationError& error)
+    {
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             "Scale shape (Shape{64, 4}) must match input shape projected along "
+                             "the quantization axes (Shape{64, 3})");
+    }
+    catch (...)
+    {
+        FAIL() << "Deduced type check failed for unexpected reason";
+    }
+}
+
+TEST(type_prop, quantize_scale_shape_mismatch_different_rank_fails)
+{
+    Shape batch_shape{64, 3, 480, 640};
+    Shape scale_shape{64, 3, 2};
+    Shape offset_shape{64, 3};
+    element::Type unquantized_type = element::f32;
+    element::Type quantized_type = element::i8;
+    element::Type batch_type = unquantized_type;
+    element::Type scale_type = unquantized_type;
+    element::Type offset_type = quantized_type;
+    AxisSet axes{0, 1};
+    auto round_mode = op::Quantize::RoundMode::HALF_AWAY_FROM_ZERO;
+
+    auto batch = make_shared<op::Parameter>(batch_type, batch_shape);
+    auto scale = make_shared<op::Parameter>(scale_type, scale_shape);
+    auto offset = make_shared<op::Parameter>(offset_type, offset_shape);
+
+    try
+    {
+        auto quant =
+            make_shared<op::Quantize>(batch, scale, offset, quantized_type, axes, round_mode);
+        FAIL() << "Mismatch of scale argument shape with required shape not detected";
+    }
+    catch (const NodeValidationError& error)
+    {
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             "Scale shape (Shape{64, 3, 2}) must match input shape projected along "
+                             "the quantization axes (Shape{64, 3})");
+    }
+    catch (...)
+    {
+        FAIL() << "Deduced type check failed for unexpected reason";
+    }
+}
+
+TEST(type_prop, quantize_offset_shape_mismatch_same_rank_fails)
+{
+    Shape batch_shape{64, 3, 480, 640};
+    Shape scale_shape{64, 3};
+    Shape offset_shape{64, 4};
+    element::Type unquantized_type = element::f32;
+    element::Type quantized_type = element::i8;
+    element::Type batch_type = unquantized_type;
+    element::Type scale_type = unquantized_type;
+    element::Type offset_type = quantized_type;
+    AxisSet axes{0, 1};
+    auto round_mode = op::Quantize::RoundMode::HALF_AWAY_FROM_ZERO;
+
+    auto batch = make_shared<op::Parameter>(batch_type, batch_shape);
+    auto scale = make_shared<op::Parameter>(scale_type, scale_shape);
+    auto offset = make_shared<op::Parameter>(offset_type, offset_shape);
+
+    try
+    {
+        auto quant =
+            make_shared<op::Quantize>(batch, scale, offset, quantized_type, axes, round_mode);
+        FAIL() << "Mismatch of offset argument shape with required shape not detected";
+    }
+    catch (const NodeValidationError& error)
+    {
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             "Offset shape (Shape{64, 4}) must match input shape projected along "
+                             "the quantization axes (Shape{64, 3})");
+    }
+    catch (...)
+    {
+        FAIL() << "Deduced type check failed for unexpected reason";
+    }
+}
+
+TEST(type_prop, quantize_offset_shape_mismatch_different_rank_fails)
+{
+    Shape batch_shape{64, 3, 480, 640};
+    Shape scale_shape{64, 3};
+    Shape offset_shape{64, 3, 2};
+    element::Type unquantized_type = element::f32;
+    element::Type quantized_type = element::i8;
+    element::Type batch_type = unquantized_type;
+    element::Type scale_type = unquantized_type;
+    element::Type offset_type = quantized_type;
+    AxisSet axes{0, 1};
+    auto round_mode = op::Quantize::RoundMode::HALF_AWAY_FROM_ZERO;
+
+    auto batch = make_shared<op::Parameter>(batch_type, batch_shape);
+    auto scale = make_shared<op::Parameter>(scale_type, scale_shape);
+    auto offset = make_shared<op::Parameter>(offset_type, offset_shape);
+
+    try
+    {
+        auto quant =
+            make_shared<op::Quantize>(batch, scale, offset, quantized_type, axes, round_mode);
+        FAIL() << "Mismatch of offset argument shape with required shape not detected";
+    }
+    catch (const NodeValidationError& error)
+    {
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             "Offset shape (Shape{64, 3, 2}) must match input shape projected "
+                             "along the quantization axes (Shape{64, 3})");
+    }
+    catch (...)
+    {
+        FAIL() << "Deduced type check failed for unexpected reason";
+    }
+}
+
+TEST(type_prop, quantize_offset_unsupported_round_mode_fails)
+{
+    Shape batch_shape{64, 3, 480, 640};
+    Shape scale_shape{64, 3};
+    Shape offset_shape{64, 3};
+    element::Type unquantized_type = element::f32;
+    element::Type quantized_type = element::i8;
+    element::Type batch_type = unquantized_type;
+    element::Type scale_type = unquantized_type;
+    element::Type offset_type = quantized_type;
+    AxisSet axes{0, 1};
+    auto round_mode = op::Quantize::RoundMode::HALF_TO_EVEN;
+
+    auto batch = make_shared<op::Parameter>(batch_type, batch_shape);
+    auto scale = make_shared<op::Parameter>(scale_type, scale_shape);
+    auto offset = make_shared<op::Parameter>(offset_type, offset_shape);
+
+    try
+    {
+        auto quant =
+            make_shared<op::Quantize>(batch, scale, offset, quantized_type, axes, round_mode);
+        FAIL() << "Mismatch of offset argument shape with required shape not detected";
+    }
+    catch (const NodeValidationError& error)
+    {
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             "Only RoundMode = HALF_AWAY_FROM_ZERO is supported, for now");
+    }
+    catch (...)
+    {
+        FAIL() << "Deduced type check failed for unexpected reason";
+    }
+}
+
+TEST(type_prop, dequantize_f32_from_i8_nchw_per_channel_ok)
+{
+    Shape batch_shape{64, 3, 480, 640};
+    Shape scale_shape{3};
+    Shape offset_shape{3};
+    element::Type unquantized_type = element::f32;
+    element::Type quantized_type = element::i8;
+    element::Type batch_type = quantized_type;
+    element::Type scale_type = unquantized_type;
+    element::Type offset_type = quantized_type;
+    AxisSet axes{1};
+
+    auto batch = make_shared<op::Parameter>(batch_type, batch_shape);
+    auto scale = make_shared<op::Parameter>(scale_type, scale_shape);
+    auto offset = make_shared<op::Parameter>(offset_type, offset_shape);
+    auto quant = make_shared<op::Dequantize>(batch, scale, offset, unquantized_type, axes);
+
+    ASSERT_EQ(quant->get_output_element_type(0), unquantized_type);
+    ASSERT_EQ(quant->get_output_shape(0), batch_shape);
+}
+
+TEST(type_prop, dequantize_f32_from_i8_nchw_per_image_ok)
+{
+    Shape batch_shape{64, 3, 480, 640};
+    Shape scale_shape{64};
+    Shape offset_shape{64};
+    element::Type unquantized_type = element::f32;
+    element::Type quantized_type = element::i8;
+    element::Type batch_type = quantized_type;
+    element::Type scale_type = unquantized_type;
+    element::Type offset_type = quantized_type;
+    AxisSet axes{0};
+
+    auto batch = make_shared<op::Parameter>(batch_type, batch_shape);
+    auto scale = make_shared<op::Parameter>(scale_type, scale_shape);
+    auto offset = make_shared<op::Parameter>(offset_type, offset_shape);
+    auto quant = make_shared<op::Dequantize>(batch, scale, offset, unquantized_type, axes);
+
+    ASSERT_EQ(quant->get_output_element_type(0), unquantized_type);
+    ASSERT_EQ(quant->get_output_shape(0), batch_shape);
+}
+
+TEST(type_prop, dequantize_f32_from_i8_nchw_per_row_ok)
+{
+    Shape batch_shape{64, 3, 480, 640};
+    Shape scale_shape{480};
+    Shape offset_shape{480};
+    element::Type unquantized_type = element::f32;
+    element::Type quantized_type = element::i8;
+    element::Type batch_type = quantized_type;
+    element::Type scale_type = unquantized_type;
+    element::Type offset_type = quantized_type;
+    AxisSet axes{2};
+
+    auto batch = make_shared<op::Parameter>(batch_type, batch_shape);
+    auto scale = make_shared<op::Parameter>(scale_type, scale_shape);
+    auto offset = make_shared<op::Parameter>(offset_type, offset_shape);
+    auto quant = make_shared<op::Dequantize>(batch, scale, offset, unquantized_type, axes);
+
+    ASSERT_EQ(quant->get_output_element_type(0), unquantized_type);
+    ASSERT_EQ(quant->get_output_shape(0), batch_shape);
+}
+
+TEST(type_prop, dequantize_f32_from_i8_nchw_per_image_channel_ok)
+{
+    Shape batch_shape{64, 3, 480, 640};
+    Shape scale_shape{64, 3};
+    Shape offset_shape{64, 3};
+    element::Type unquantized_type = element::f32;
+    element::Type quantized_type = element::i8;
+    element::Type batch_type = quantized_type;
+    element::Type scale_type = unquantized_type;
+    element::Type offset_type = quantized_type;
+    AxisSet axes{0, 1};
+
+    auto batch = make_shared<op::Parameter>(batch_type, batch_shape);
+    auto scale = make_shared<op::Parameter>(scale_type, scale_shape);
+    auto offset = make_shared<op::Parameter>(offset_type, offset_shape);
+    auto quant = make_shared<op::Dequantize>(batch, scale, offset, unquantized_type, axes);
+
+    ASSERT_EQ(quant->get_output_element_type(0), unquantized_type);
+    ASSERT_EQ(quant->get_output_shape(0), batch_shape);
+}
+
+TEST(type_prop, dequantize_f32_from_i8_nchw_whole_batch_ok)
+{
+    Shape batch_shape{64, 3, 480, 640};
+    Shape scale_shape{};
+    Shape offset_shape{};
+    element::Type unquantized_type = element::f32;
+    element::Type quantized_type = element::i8;
+    element::Type batch_type = quantized_type;
+    element::Type scale_type = unquantized_type;
+    element::Type offset_type = quantized_type;
+    AxisSet axes{};
+
+    auto batch = make_shared<op::Parameter>(batch_type, batch_shape);
+    auto scale = make_shared<op::Parameter>(scale_type, scale_shape);
+    auto offset = make_shared<op::Parameter>(offset_type, offset_shape);
+    auto quant = make_shared<op::Dequantize>(batch, scale, offset, unquantized_type, axes);
+
+    ASSERT_EQ(quant->get_output_element_type(0), unquantized_type);
+    ASSERT_EQ(quant->get_output_shape(0), batch_shape);
+}
+
+TEST(type_prop, dequantize_f64_from_i8_ok)
+{
+    Shape batch_shape{64, 3, 480, 640};
+    Shape scale_shape{};
+    Shape offset_shape{};
+    element::Type unquantized_type = element::f64;
+    element::Type quantized_type = element::i8;
+    element::Type batch_type = quantized_type;
+    element::Type scale_type = unquantized_type;
+    element::Type offset_type = quantized_type;
+    AxisSet axes{};
+
+    auto batch = make_shared<op::Parameter>(batch_type, batch_shape);
+    auto scale = make_shared<op::Parameter>(scale_type, scale_shape);
+    auto offset = make_shared<op::Parameter>(offset_type, offset_shape);
+    auto quant = make_shared<op::Dequantize>(batch, scale, offset, unquantized_type, axes);
+
+    ASSERT_EQ(quant->get_output_element_type(0), unquantized_type);
+    ASSERT_EQ(quant->get_output_shape(0), batch_shape);
+}
+
+TEST(type_prop, dequantize_f64_to_u8_ok)
+{
+    Shape batch_shape{64, 3, 480, 640};
+    Shape scale_shape{};
+    Shape offset_shape{};
+    element::Type unquantized_type = element::f64;
+    element::Type quantized_type = element::u8;
+    element::Type batch_type = quantized_type;
+    element::Type scale_type = unquantized_type;
+    element::Type offset_type = quantized_type;
+    AxisSet axes{};
+
+    auto batch = make_shared<op::Parameter>(batch_type, batch_shape);
+    auto scale = make_shared<op::Parameter>(scale_type, scale_shape);
+    auto offset = make_shared<op::Parameter>(offset_type, offset_shape);
+    auto quant = make_shared<op::Dequantize>(batch, scale, offset, unquantized_type, axes);
+
+    ASSERT_EQ(quant->get_output_element_type(0), unquantized_type);
+    ASSERT_EQ(quant->get_output_shape(0), batch_shape);
+}
+
+TEST(type_prop, dequantize_i8_from_u8_fails)
+{
+    Shape batch_shape{64, 3, 480, 640};
+    Shape scale_shape{};
+    Shape offset_shape{};
+    element::Type unquantized_type = element::i8;
+    element::Type quantized_type = element::u8;
+    element::Type batch_type = quantized_type;
+    element::Type scale_type = unquantized_type;
+    element::Type offset_type = quantized_type;
+    AxisSet axes{};
+
+    auto batch = make_shared<op::Parameter>(batch_type, batch_shape);
+    auto scale = make_shared<op::Parameter>(scale_type, scale_shape);
+    auto offset = make_shared<op::Parameter>(offset_type, offset_shape);
+
+    try
+    {
+        auto quant = make_shared<op::Dequantize>(batch, scale, offset, unquantized_type, axes);
+        FAIL() << "Attempt to dequantize to non-floating point type not detected";
+    }
+    catch (const NodeValidationError& error)
+    {
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             "Output element type (element::Type{8, 0, 1, 1, \"int8_t\"}) must be "
+                             "a floating point number");
+    }
+    catch (...)
+    {
+        FAIL() << "Deduced type check failed for unexpected reason";
+    }
+}
+
+TEST(type_prop, dequantize_f32_from_f32_fails)
+{
+    Shape batch_shape{64, 3, 480, 640};
+    Shape scale_shape{};
+    Shape offset_shape{};
+    element::Type unquantized_type = element::f32;
+    element::Type quantized_type = element::f32;
+    element::Type batch_type = quantized_type;
+    element::Type scale_type = unquantized_type;
+    element::Type offset_type = quantized_type;
+    AxisSet axes{};
+
+    auto batch = make_shared<op::Parameter>(batch_type, batch_shape);
+    auto scale = make_shared<op::Parameter>(scale_type, scale_shape);
+    auto offset = make_shared<op::Parameter>(offset_type, offset_shape);
+
+    try
+    {
+        auto quant = make_shared<op::Dequantize>(batch, scale, offset, unquantized_type, axes);
+        FAIL() << "Attempt to dequantize from non-quantized type not detected";
+    }
+    catch (const NodeValidationError& error)
+    {
+        EXPECT_HAS_SUBSTRING(
+            error.what(),
+            "Input element type (element::Type{32, 1, 1, 0, \"float\"}) must be a quantized type");
+    }
+    catch (...)
+    {
+        FAIL() << "Deduced type check failed for unexpected reason";
+    }
+}
+
+TEST(type_prop, dequantize_batch_offset_type_mismatch_fails)
+{
+    Shape batch_shape{64, 3, 480, 640};
+    Shape scale_shape{};
+    Shape offset_shape{};
+    element::Type unquantized_type = element::f32;
+    element::Type quantized_type = element::i8;
+    element::Type batch_type = quantized_type;
+    element::Type scale_type = unquantized_type;
+    element::Type offset_type = element::u8;
+    AxisSet axes{};
+
+    auto batch = make_shared<op::Parameter>(batch_type, batch_shape);
+    auto scale = make_shared<op::Parameter>(scale_type, scale_shape);
+    auto offset = make_shared<op::Parameter>(offset_type, offset_shape);
+
+    try
+    {
+        auto quant = make_shared<op::Dequantize>(batch, scale, offset, unquantized_type, axes);
+        FAIL() << "Mismatch of batch and offset element types not detected";
+    }
+    catch (const NodeValidationError& error)
+    {
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             "Offset element type (element::Type{8, 0, 0, 1, \"uint8_t\"}) must "
+                             "match input element type (element::Type{8, 0, 1, 1, \"int8_t\"})");
+    }
+    catch (...)
+    {
+        FAIL() << "Deduced type check failed for unexpected reason";
+    }
+}
+
+TEST(type_prop, dequantize_scale_type_mismatch_fails)
+{
+    Shape batch_shape{64, 3, 480, 640};
+    Shape scale_shape{};
+    Shape offset_shape{};
+    element::Type unquantized_type = element::f32;
+    element::Type quantized_type = element::i8;
+    element::Type batch_type = quantized_type;
+    element::Type scale_type = element::f64;
+    element::Type offset_type = quantized_type;
+    AxisSet axes{};
+
+    auto batch = make_shared<op::Parameter>(batch_type, batch_shape);
+    auto scale = make_shared<op::Parameter>(scale_type, scale_shape);
+    auto offset = make_shared<op::Parameter>(offset_type, offset_shape);
+
+    try
+    {
+        auto quant = make_shared<op::Dequantize>(batch, scale, offset, unquantized_type, axes);
+        FAIL() << "Mismatch of scale element type with scale argument not detected";
+    }
+    catch (const NodeValidationError& error)
+    {
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             "Scale element type (element::Type{64, 1, 1, 0, \"double\"}) must "
+                             "match the output element type (element::Type{32, 1, 1, 0, "
+                             "\"float\"})");
+    }
+    catch (...)
+    {
+        FAIL() << "Deduced type check failed for unexpected reason";
+    }
+}
+
+TEST(type_prop, dequantize_oob_axis_fails)
+{
+    Shape batch_shape{64, 3, 480, 640};
+    Shape scale_shape{320};
+    Shape offset_shape{320};
+    element::Type unquantized_type = element::f32;
+    element::Type quantized_type = element::i8;
+    element::Type batch_type = quantized_type;
+    element::Type scale_type = unquantized_type;
+    element::Type offset_type = quantized_type;
+    AxisSet axes{3, 4};
+
+    auto batch = make_shared<op::Parameter>(batch_type, batch_shape);
+    auto scale = make_shared<op::Parameter>(scale_type, scale_shape);
+    auto offset = make_shared<op::Parameter>(offset_type, offset_shape);
+
+    try
+    {
+        auto quant = make_shared<op::Dequantize>(batch, scale, offset, unquantized_type, axes);
+        FAIL() << "Out-of-bounds quantization axis not detected";
+    }
+    catch (const NodeValidationError& error)
+    {
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             "Quantization axis (4) must be less than input shape rank (4)");
+    }
+    catch (...)
+    {
+        FAIL() << "Deduced type check failed for unexpected reason";
+    }
+}
+
+TEST(type_prop, dequantize_scale_shape_mismatch_same_rank_fails)
+{
+    Shape batch_shape{64, 3, 480, 640};
+    Shape scale_shape{64, 4};
+    Shape offset_shape{64, 3};
+    element::Type unquantized_type = element::f32;
+    element::Type quantized_type = element::i8;
+    element::Type batch_type = quantized_type;
+    element::Type scale_type = unquantized_type;
+    element::Type offset_type = quantized_type;
+    AxisSet axes{0, 1};
+
+    auto batch = make_shared<op::Parameter>(batch_type, batch_shape);
+    auto scale = make_shared<op::Parameter>(scale_type, scale_shape);
+    auto offset = make_shared<op::Parameter>(offset_type, offset_shape);
+
+    try
+    {
+        auto quant = make_shared<op::Dequantize>(batch, scale, offset, unquantized_type, axes);
+        FAIL() << "Mismatch of scale argument shape with required shape not detected";
+    }
+    catch (const NodeValidationError& error)
+    {
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             "Scale shape (Shape{64, 4}) must match input shape projected along "
+                             "the quantization axes (Shape{64, 3})");
+    }
+    catch (...)
+    {
+        FAIL() << "Deduced type check failed for unexpected reason";
+    }
+}
+
+TEST(type_prop, dequantize_scale_shape_mismatch_different_rank_fails)
+{
+    Shape batch_shape{64, 3, 480, 640};
+    Shape scale_shape{64, 3, 2};
+    Shape offset_shape{64, 3};
+    element::Type unquantized_type = element::f32;
+    element::Type quantized_type = element::i8;
+    element::Type batch_type = quantized_type;
+    element::Type scale_type = unquantized_type;
+    element::Type offset_type = quantized_type;
+    AxisSet axes{0, 1};
+
+    auto batch = make_shared<op::Parameter>(batch_type, batch_shape);
+    auto scale = make_shared<op::Parameter>(scale_type, scale_shape);
+    auto offset = make_shared<op::Parameter>(offset_type, offset_shape);
+
+    try
+    {
+        auto quant = make_shared<op::Dequantize>(batch, scale, offset, unquantized_type, axes);
+        FAIL() << "Mismatch of scale argument shape with required shape not detected";
+    }
+    catch (const NodeValidationError& error)
+    {
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             "Scale shape (Shape{64, 3, 2}) must match input shape projected along "
+                             "the quantization axes (Shape{64, 3})");
+    }
+    catch (...)
+    {
+        FAIL() << "Deduced type check failed for unexpected reason";
+    }
+}
+
+TEST(type_prop, dequantize_offset_shape_mismatch_same_rank_fails)
+{
+    Shape batch_shape{64, 3, 480, 640};
+    Shape scale_shape{64, 3};
+    Shape offset_shape{64, 4};
+    element::Type unquantized_type = element::f32;
+    element::Type quantized_type = element::i8;
+    element::Type batch_type = quantized_type;
+    element::Type scale_type = unquantized_type;
+    element::Type offset_type = quantized_type;
+    AxisSet axes{0, 1};
+
+    auto batch = make_shared<op::Parameter>(batch_type, batch_shape);
+    auto scale = make_shared<op::Parameter>(scale_type, scale_shape);
+    auto offset = make_shared<op::Parameter>(offset_type, offset_shape);
+
+    try
+    {
+        auto quant = make_shared<op::Dequantize>(batch, scale, offset, unquantized_type, axes);
+        FAIL() << "Mismatch of offset argument shape with required shape not detected";
+    }
+    catch (const NodeValidationError& error)
+    {
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             "Offset shape (Shape{64, 4}) must match input shape projected along "
+                             "the quantization axes (Shape{64, 3})");
+    }
+    catch (...)
+    {
+        FAIL() << "Deduced type check failed for unexpected reason";
+    }
+}
+
+TEST(type_prop, dequantize_offset_shape_mismatch_different_rank_fails)
+{
+    Shape batch_shape{64, 3, 480, 640};
+    Shape scale_shape{64, 3};
+    Shape offset_shape{64, 3, 2};
+    element::Type unquantized_type = element::f32;
+    element::Type quantized_type = element::i8;
+    element::Type batch_type = quantized_type;
+    element::Type scale_type = unquantized_type;
+    element::Type offset_type = quantized_type;
+    AxisSet axes{0, 1};
+
+    auto batch = make_shared<op::Parameter>(batch_type, batch_shape);
+    auto scale = make_shared<op::Parameter>(scale_type, scale_shape);
+    auto offset = make_shared<op::Parameter>(offset_type, offset_shape);
+
+    try
+    {
+        auto quant = make_shared<op::Dequantize>(batch, scale, offset, unquantized_type, axes);
+        FAIL() << "Mismatch of offset argument shape with required shape not detected";
+    }
+    catch (const NodeValidationError& error)
+    {
+        EXPECT_HAS_SUBSTRING(error.what(),
+                             "Offset shape (Shape{64, 3, 2}) must match input shape projected "
+                             "along the quantization axes (Shape{64, 3})");
+    }
+    catch (...)
+    {
+        FAIL() << "Deduced type check failed for unexpected reason";
+    }
+}
+
+//
+// This is testing a temporary hack for ops that do not yet support partial-shape validation.
+// The graph we construct here is bogus, but because there is some partiality in the input shapes,
+// it should still pass validation but set the output shape and element types to be dynamic.
+//
+TEST(type_prop, validate_punt_if_dynamic)
+{
+    auto a = make_shared<op::Parameter>(element::i64, Shape{1, 2, 3, 4});
+    auto b = make_shared<op::Parameter>(element::u32, PartialShape{1, Dimension::dynamic(), 3});
+    auto c = make_shared<op::Parameter>(element::i32, Shape{1, 8, 3});
+    auto concat = make_shared<op::Concat>(NodeVector{a, b, c}, /*concatenation axis=*/1234);
+
+    ASSERT_EQ(concat->get_output_size(), 1);
+    ASSERT_TRUE(concat->get_output_partial_shape(0).rank().is_dynamic());
+    ASSERT_TRUE(concat->get_output_element_type(0).is_dynamic());
 }

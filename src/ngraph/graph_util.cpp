@@ -1,18 +1,18 @@
-/*******************************************************************************
-* Copyright 2017-2018 Intel Corporation
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*     http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*******************************************************************************/
+//*****************************************************************************
+// Copyright 2017-2018 Intel Corporation
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//*****************************************************************************
 
 #include <cassert>
 #include <deque>
@@ -39,24 +39,44 @@ using namespace std;
 using namespace ngraph;
 
 void ngraph::traverse_nodes(const std::shared_ptr<const Function> p,
-                            std::function<void(std::shared_ptr<Node>)> f)
+                            std::function<void(std::shared_ptr<Node>)> f,
+                            bool include_control_deps)
 {
-    traverse_nodes(p.get(), f);
+    traverse_nodes(p.get(), f, include_control_deps);
 }
 
-void ngraph::traverse_nodes(const Function* p, std::function<void(std::shared_ptr<Node>)> f)
+void ngraph::traverse_nodes(const Function* p,
+                            std::function<void(std::shared_ptr<Node>)> f,
+                            bool include_control_deps)
 {
-    std::unordered_set<std::shared_ptr<Node>> instances_seen;
-    std::deque<std::shared_ptr<Node>> stack;
+    NodeVector nodes;
 
     for (auto r : p->get_results())
     {
-        stack.push_front(r);
+        nodes.push_back(r);
     }
 
     for (auto param : p->get_parameters())
     {
-        stack.push_front(param);
+        nodes.push_back(param);
+    }
+
+    traverse_nodes(nodes, f, include_control_deps);
+}
+
+// This version of traverses directly from input/output nodes to perform functions on
+// graphs that are not wrapped by functions. Most useful for finding parameters of a graph
+// directly from the result nodes, not from function parameters.
+void ngraph::traverse_nodes(const NodeVector& io_nodes,
+                            std::function<void(std::shared_ptr<Node>)> f,
+                            bool include_control_deps)
+{
+    std::unordered_set<std::shared_ptr<Node>> instances_seen;
+    std::deque<std::shared_ptr<Node>> stack;
+
+    for (auto r : io_nodes)
+    {
+        stack.push_front(r);
     }
 
     while (stack.size() > 0)
@@ -73,6 +93,17 @@ void ngraph::traverse_nodes(const Function* p, std::function<void(std::shared_pt
             if (instances_seen.count(arg) == 0)
             {
                 stack.push_front(arg);
+            }
+        }
+
+        if (include_control_deps)
+        {
+            for (auto cdep : n->get_control_dependencies())
+            {
+                if (instances_seen.count(cdep) == 0)
+                {
+                    stack.push_front(cdep);
+                }
             }
         }
     }
@@ -133,45 +164,6 @@ void ngraph::replace_node(std::shared_ptr<Node> target, std::shared_ptr<Node> re
             input->replace_output(replacement->get_outputs().at(i));
         }
     }
-}
-
-std::list<std::shared_ptr<ngraph::Node>>
-    ngraph::topological_sort(const std::list<std::shared_ptr<Node>>& nodes)
-{
-    deque<ngraph::Node*> independent_nodes;
-    unordered_map<const ngraph::Node*, size_t> node_dependency_count;
-    unordered_map<ngraph::Node*, shared_ptr<ngraph::Node>> node_map;
-
-    for (auto node : nodes)
-    {
-        node_map[node.get()] = node;
-        node_dependency_count[node.get()] = node->get_arguments().size();
-        if (node->get_arguments().size() == 0)
-        {
-            independent_nodes.push_back(node.get());
-        }
-    }
-
-    list<shared_ptr<ngraph::Node>> result_list;
-    while (independent_nodes.size() > 0)
-    {
-        auto independent_node = independent_nodes.front();
-        result_list.push_back(node_map[independent_node]);
-        independent_nodes.pop_front();
-
-        for (auto user_sp : independent_node->get_users())
-        {
-            Node* user = user_sp.get();
-            node_dependency_count[user] -= 1;
-            size_t count = node_dependency_count[user];
-            if (count == 0)
-            {
-                independent_nodes.push_back(user);
-            }
-        }
-    }
-
-    return result_list;
 }
 
 // Check if all paths from X to a result go through Y
@@ -236,7 +228,7 @@ std::list<std::shared_ptr<ngraph::Node>>
     ngraph::clone_nodes(const std::list<std::shared_ptr<ngraph::Node>>& nodes, NodeMap& node_map)
 {
     // for each node in topological order
-    auto sorted_nodes = topological_sort(nodes);
+    auto sorted_nodes = topological_sort(nodes, true);
     for (auto node : sorted_nodes)
     {
         if (!node_map.exists(node))
@@ -247,7 +239,14 @@ std::list<std::shared_ptr<ngraph::Node>>
             {
                 cloned_args.push_back(node_map.get(arg));
             }
-            node_map.add(node, node->copy_with_new_args(cloned_args));
+            auto cloned_node = node->copy_with_new_args(cloned_args);
+
+            //copy control dependencies
+            for (auto cdep : node->get_control_dependencies())
+            {
+                cloned_node->add_control_dependency(node_map.get(cdep));
+            }
+            node_map.add(node, cloned_node);
         }
     }
 
@@ -271,7 +270,7 @@ std::shared_ptr<ngraph::Function> ngraph::clone_function(const ngraph::Function&
                                                          NodeMap& node_map)
 {
     // clone function operations
-    clone_nodes(func.get_ops(), node_map);
+    clone_nodes(func.get_ops(true), node_map);
 
     // get cloned function results and parameters
     ResultVector cloned_results;
@@ -531,28 +530,6 @@ size_t ngraph::get_user_count(Node* node)
     return count;
 }
 
-bool ngraph::computes_result(Node* node)
-{
-    if (node->is_output())
-    {
-        return true;
-    }
-
-    // Check if node feeds a result node that has been copy eliminated
-    for (const descriptor::Output& output : node->get_outputs())
-    {
-        for (const descriptor::Input* input : output.get_inputs())
-        {
-            auto res = std::dynamic_pointer_cast<ngraph::op::Result>(input->get_node());
-            if (res && !res->needs_copy())
-            {
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
 bool ngraph::possibly_overwritten(Node* node)
 {
     for (const descriptor::Output& output : node->get_outputs())
@@ -565,13 +542,31 @@ bool ngraph::possibly_overwritten(Node* node)
                 {
                     for (auto oi_pair : op_annotations->get_in_place_oi_pairs())
                     {
-                        if (input->get_index() == oi_pair.input)
+                        if (input->get_index() == oi_pair.input && oi_pair.destructive)
                         {
                             return true;
                         }
                     }
                 }
             }
+        }
+    }
+    return false;
+}
+
+bool ngraph::is_strided(const Strides& strides)
+{
+    return std::any_of(strides.begin(), strides.end(), [](size_t stride) { return stride != 1; });
+}
+
+bool ngraph::is_valid_rank(const std::shared_ptr<Node>& node, std::vector<size_t> valid_ranks)
+{
+    auto node_rank = node->get_shape().size();
+    for (auto rank : valid_ranks)
+    {
+        if (rank == node_rank)
+        {
+            return true;
         }
     }
     return false;

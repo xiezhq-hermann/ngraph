@@ -1,7 +1,7 @@
 .. ops/index.rst
 
-Core Ops
-========
+About Core Ops
+==============
 
 An ``Op``'s primary role is to function as a node in a directed acyclic graph 
 dependency computation graph.  
@@ -40,7 +40,7 @@ that must be performed are:
 
 
 Alphabetical list of Core ``ops``
-----------------------------------
+=================================
 
 Not currently a comprehensive list.  
 
@@ -65,8 +65,10 @@ Not currently a comprehensive list.
    * :doc:`convolution`
    * :doc:`cos`
    * :doc:`cosh`
+   * :doc:`dequantize`
    * :doc:`divide`
    * :doc:`dot`
+   * :doc:`drop_out`
    * :doc:`equal`
    * :doc:`exp`
    * :doc:`floor`
@@ -92,9 +94,17 @@ Not currently a comprehensive list.
    * :doc:`parameter`
    * :doc:`power`
    * :doc:`product`
+   * :doc:`quantize`
    * :doc:`relu`
+   * :doc:`result`
    * :doc:`sigmoid`
+   * :doc:`sign`
+   * :doc:`sin`
+   * :doc:`sinh`
    * :doc:`softmax`
+   * :doc:`sqrt`
+   * :doc:`subtract`
+   * :doc:`tan`
    * :doc:`tanh`
 
 
@@ -120,8 +130,10 @@ Not currently a comprehensive list.
    convolution.rst
    cos.rst
    cosh.rst
+   dequantize.rst
    divide.rst
    dot.rst
+   drop_out.rst
    equal.rst
    exp.rst
    floor.rst
@@ -147,9 +159,15 @@ Not currently a comprehensive list.
    parameter.rst
    power.rst
    product.rst
+   quantize.rst
    relu.rst
+   result.rst
    sigmoid.rst
+   sign.rst
+   sin.rst
+   sinh.rst
    softmax.rst
+   sqrt.rst
+   subtract.rst
+   tan.rst
    tanh.rst
-
-   

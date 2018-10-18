@@ -1,18 +1,18 @@
-/*******************************************************************************
-* Copyright 2017-2018 Intel Corporation
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*     http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*******************************************************************************/
+//*****************************************************************************
+// Copyright 2017-2018 Intel Corporation
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//*****************************************************************************
 
 #include <algorithm>
 
@@ -39,13 +39,12 @@ runtime::cpu::CPU_CallFrame::~CPU_CallFrame()
 }
 
 void runtime::cpu::CPU_CallFrame::call(
-    const std::vector<std::shared_ptr<runtime::TensorView>>& output_tvs,
-    const std::vector<std::shared_ptr<runtime::TensorView>>& input_tvs)
+    const std::vector<std::shared_ptr<runtime::Tensor>>& output_tvs,
+    const std::vector<std::shared_ptr<runtime::Tensor>>& input_tvs)
 {
     vector<void*> inputs;
     vector<void*> outputs;
 
-    propagate_layouts(input_tvs, m_external_function->get_parameter_layout_descriptors());
     propagate_layouts(output_tvs, m_external_function->get_result_layout_descriptors());
 
     for (size_t i = 0; i < input_tvs.size(); i++)
@@ -81,7 +80,7 @@ void runtime::cpu::CPU_CallFrame::call(
 }
 
 void runtime::cpu::CPU_CallFrame::propagate_layouts(
-    const std::vector<std::shared_ptr<runtime::TensorView>>& tvs,
+    const std::vector<std::shared_ptr<runtime::Tensor>>& tvs,
     const LayoutDescriptorPtrs& layouts) const
 {
     if (layouts.size() != tvs.size())
@@ -96,7 +95,7 @@ void runtime::cpu::CPU_CallFrame::propagate_layouts(
             throw ngraph_error(
                 "Error propagating layouts - layout information missing from tensor view");
         }
-        tvs[i]->get_descriptor()->set_tensor_view_layout(layouts[i]);
+        tvs[i]->set_tensor_layout(layouts[i]);
     }
 }
 

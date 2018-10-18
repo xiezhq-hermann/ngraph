@@ -1,18 +1,18 @@
-/*******************************************************************************
-* Copyright 2017-2018 Intel Corporation
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*     http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*******************************************************************************/
+//*****************************************************************************
+// Copyright 2017-2018 Intel Corporation
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//*****************************************************************************
 
 #pragma once
 
@@ -23,7 +23,7 @@
 #include "ngraph/function.hpp"
 #include "ngraph/runtime/cpu/cpu_layout_descriptor.hpp"
 #include "ngraph/runtime/cpu/cpu_runtime_context.hpp"
-#include "ngraph/runtime/tensor_view.hpp"
+#include "ngraph/runtime/tensor.hpp"
 
 namespace ngraph
 {
@@ -46,19 +46,23 @@ namespace ngraph
                               EntryPoint compiled_function);
                 ~CPU_CallFrame();
 
-                /// @brief Invoke the function with values matching the signature of the function.
+                /// \brief Invoke the function with values matching the signature of the function.
                 ///
                 /// Tuples will be expanded into their tensor views to build the call frame.
-                void call(const std::vector<std::shared_ptr<runtime::TensorView>>& outputs,
-                          const std::vector<std::shared_ptr<runtime::TensorView>>& inputs);
+                void call(const std::vector<std::shared_ptr<runtime::Tensor>>& outputs,
+                          const std::vector<std::shared_ptr<runtime::Tensor>>& inputs);
 
-                void propagate_layouts(const std::vector<std::shared_ptr<runtime::TensorView>>& tvs,
+                void propagate_layouts(const std::vector<std::shared_ptr<runtime::Tensor>>& tvs,
                                        const LayoutDescriptorPtrs& layouts) const;
 
                 void setup_runtime_context();
                 void cleanup_runtime_context();
 
             protected:
+                CPU_CallFrame(const CPU_CallFrame&) = delete;
+                CPU_CallFrame(CPU_CallFrame&&) = delete;
+                CPU_CallFrame& operator=(const CPU_CallFrame&) = delete;
+
                 std::shared_ptr<CPU_ExternalFunction> m_external_function;
                 EntryPoint m_compiled_function;
                 CPURuntimeContext* ctx;

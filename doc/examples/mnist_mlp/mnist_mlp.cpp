@@ -1,18 +1,18 @@
-/*******************************************************************************
-* Copyright 2017-2018 Intel Corporation
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*     http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*******************************************************************************/
+//*****************************************************************************
+// Copyright 2017-2018 Intel Corporation
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//*****************************************************************************
 
 #include <cstdio>
 #include <functional>
@@ -34,9 +34,8 @@
 
 using namespace ngraph;
 
-size_t
-    accuracy_count(const std::shared_ptr<runtime::TensorView>& t_softmax,
-                   const std::shared_ptr<runtime::TensorView>& t_Y)
+size_t accuracy_count(const std::shared_ptr<runtime::Tensor>& t_softmax,
+                      const std::shared_ptr<runtime::Tensor>& t_Y)
 {
     const Shape& softmax_shape = t_softmax->get_shape();
     size_t batch_size = softmax_shape.at(0);
@@ -75,13 +74,13 @@ size_t
 float test_accuracy(MNistDataLoader& loader,
                     std::shared_ptr<runtime::Backend> backend,
                     std::shared_ptr<Function> function,
-                    const std::shared_ptr<runtime::TensorView>& t_X,
-                    const std::shared_ptr<runtime::TensorView>& t_Y,
-                    const std::shared_ptr<runtime::TensorView>& t_softmax,
-                    const std::shared_ptr<runtime::TensorView>& t_W0,
-                    const std::shared_ptr<runtime::TensorView>& t_b0,
-                    const std::shared_ptr<runtime::TensorView>& t_W1,
-                    const std::shared_ptr<runtime::TensorView>& t_b1)
+                    const std::shared_ptr<runtime::Tensor>& t_X,
+                    const std::shared_ptr<runtime::Tensor>& t_Y,
+                    const std::shared_ptr<runtime::Tensor>& t_softmax,
+                    const std::shared_ptr<runtime::Tensor>& t_W0,
+                    const std::shared_ptr<runtime::Tensor>& t_b0,
+                    const std::shared_ptr<runtime::Tensor>& t_W1,
+                    const std::shared_ptr<runtime::Tensor>& t_b1)
 {
     loader.reset();
     size_t batch_size = loader.get_batch_size();

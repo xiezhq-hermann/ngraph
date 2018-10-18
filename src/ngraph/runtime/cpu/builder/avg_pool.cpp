@@ -1,18 +1,18 @@
-/*******************************************************************************
-* Copyright 2018 Intel Corporation
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*     http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*******************************************************************************/
+//*****************************************************************************
+// Copyright 2017-2018 Intel Corporation
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//*****************************************************************************
 
 #include "ngraph/runtime/cpu/kernel/avg_pool.hpp"
 #include "ngraph/op/avg_pool.hpp"
@@ -35,13 +35,12 @@ namespace ngraph
                 auto avg_pool = static_cast<const ngraph::op::AvgPool*>(node);
 
                 auto& functors = external_function->get_functors();
-                auto& tensor_data = external_function->get_tensor_data();
 
                 auto arg0_shape = args[0].get_shape();
                 auto out_shape = out[0].get_shape();
 
-                auto& arg0_tensor = tensor_data[args[0].get_name()];
-                auto& out_tensor = tensor_data[out[0].get_name()];
+                auto& arg0_tensor = external_function->get_tensor_data(args[0].get_name());
+                auto& out_tensor = external_function->get_tensor_data(out[0].get_name());
 
                 auto window_shape = avg_pool->get_window_shape();
                 auto window_movement_strides = avg_pool->get_window_movement_strides();
@@ -53,10 +52,8 @@ namespace ngraph
                 if (runtime::cpu::mkldnn_utils::use_mkldnn_kernel(node))
                 {
                     auto& mkldnn_emitter = external_function->get_mkldnn_emitter();
-                    auto input_desc = mkldnn_emitter->build_memory_descriptor(
-                        args[0], runtime::cpu::mkldnn_utils::get_input_mkldnn_format(node, 0));
-                    auto result_desc = mkldnn_emitter->build_memory_descriptor(
-                        out[0], runtime::cpu::mkldnn_utils::get_output_mkldnn_format(node, 0));
+                    auto input_desc = mkldnn_utils::get_input_mkldnn_md(node, 0);
+                    auto result_desc = mkldnn_utils::get_output_mkldnn_md(node, 0);
 
                     size_t avg_pool_index = mkldnn_emitter->build_pooling_forward(
                         (include_padding_in_avg_computation
@@ -114,13 +111,12 @@ namespace ngraph
                 auto apb = static_cast<const ngraph::op::AvgPoolBackprop*>(node);
 
                 auto& functors = external_function->get_functors();
-                auto& tensor_data = external_function->get_tensor_data();
 
                 auto delta_shape = args[0].get_shape();
                 auto out_shape = out[0].get_shape();
 
-                auto& delta_tensor = tensor_data[args[0].get_name()];
-                auto& out_tensor = tensor_data[out[0].get_name()];
+                auto& delta_tensor = external_function->get_tensor_data(args[0].get_name());
+                auto& out_tensor = external_function->get_tensor_data(out[0].get_name());
 
                 auto window_shape = apb->get_window_shape();
                 auto window_movement_strides = apb->get_window_movement_strides();
@@ -132,10 +128,8 @@ namespace ngraph
                 if (runtime::cpu::mkldnn_utils::use_mkldnn_kernel(node))
                 {
                     auto& mkldnn_emitter = external_function->get_mkldnn_emitter();
-                    auto diff_dst_desc = mkldnn_emitter->build_memory_descriptor(
-                        args[0], runtime::cpu::mkldnn_utils::get_input_mkldnn_format(node, 0));
-                    auto diff_src_desc = mkldnn_emitter->build_memory_descriptor(
-                        out[0], runtime::cpu::mkldnn_utils::get_output_mkldnn_format(node, 0));
+                    auto diff_dst_desc = runtime::cpu::mkldnn_utils::get_input_mkldnn_md(node, 0);
+                    auto diff_src_desc = runtime::cpu::mkldnn_utils::get_output_mkldnn_md(node, 0);
 
                     size_t avg_pool_index = mkldnn_emitter->build_pooling_backward(
                         (apb->get_include_padding_in_avg_computation()
@@ -159,7 +153,6 @@ namespace ngraph
                 else
                 {
                     std::function<decltype(runtime::cpu::kernel::avg_pool_backprop<float>)> kernel;
-
                     SELECT_KERNEL(
                         kernel, out[0].get_element_type(), runtime::cpu::kernel::avg_pool_backprop);
 

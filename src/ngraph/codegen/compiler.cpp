@@ -1,18 +1,18 @@
-/*******************************************************************************
-* Copyright 2017-2018 Intel Corporation
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*     http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*******************************************************************************/
+//*****************************************************************************
+// Copyright 2017-2018 Intel Corporation
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//*****************************************************************************
 
 #include <iostream>
 
@@ -298,7 +298,8 @@ void codegen::CompilerCore::add_header_search_path(const string& p)
     vector<string> paths = split(p, ';');
     for (const string& path : paths)
     {
-        if (!contains(m_extra_search_path_list, path))
+        if (find(m_extra_search_path_list.begin(), m_extra_search_path_list.end(), path) ==
+            m_extra_search_path_list.end())
         {
             m_extra_search_path_list.push_back(path);
             HeaderSearchOptions& hso = m_compiler->getInvocation().getHeaderSearchOpts();
@@ -408,11 +409,16 @@ void codegen::CompilerCore::configure_search_path()
 #endif
 
 #if defined(__APPLE__)
+#ifdef EIGEN_HEADERS_PATH
     add_header_search_path(EIGEN_HEADERS_PATH);
+#endif
+#ifdef MKLDNN_HEADERS_PATH
     add_header_search_path(MKLDNN_HEADERS_PATH);
+#endif
+#ifdef TBB_HEADERS_PATH
     add_header_search_path(TBB_HEADERS_PATH);
+#endif
     add_header_search_path(NGRAPH_HEADERS_PATH);
-    add_header_search_path(INSTALLED_HEADERS_PATH);
     add_header_search_path(CLANG_BUILTIN_HEADERS_PATH);
 
     add_header_search_path("/Library/Developer/CommandLineTools/usr/include/c++/v1");
@@ -423,6 +429,16 @@ void codegen::CompilerCore::configure_search_path()
     // Instead of re-implementing all of that functionality in a custom toolchain
     // just hardcode the paths relevant to frequently used build/test machines for now
     add_header_search_path(CLANG_BUILTIN_HEADERS_PATH);
+#ifdef EIGEN_HEADERS_PATH
+    add_header_search_path(EIGEN_HEADERS_PATH);
+#endif
+#ifdef MKLDNN_HEADERS_PATH
+    add_header_search_path(MKLDNN_HEADERS_PATH);
+#endif
+#ifdef TBB_HEADERS_PATH
+    add_header_search_path(TBB_HEADERS_PATH);
+#endif
+    add_header_search_path(NGRAPH_HEADERS_PATH);
 
     string header_version = find_header_version("/usr/include/c++");
     string os_specific_path =
@@ -444,12 +460,6 @@ void codegen::CompilerCore::configure_search_path()
         file_util::path_join("/usr/lib/gcc/x86_64-linux-gnu/", header_version, "/include-fixed"));
     add_header_search_path("/usr/include/x86_64-linux-gnu");
     add_header_search_path("/usr/include");
-
-    add_header_search_path(EIGEN_HEADERS_PATH);
-    add_header_search_path(MKLDNN_HEADERS_PATH);
-    add_header_search_path(TBB_HEADERS_PATH);
-    add_header_search_path(NGRAPH_HEADERS_PATH);
-    add_header_search_path(INSTALLED_HEADERS_PATH);
 #endif
 
 #ifdef CUDA_HEADER_PATHS

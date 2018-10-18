@@ -1,18 +1,18 @@
-/*******************************************************************************
-* Copyright 2017-2018 Intel Corporation
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*     http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*******************************************************************************/
+//*****************************************************************************
+// Copyright 2017-2018 Intel Corporation
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//*****************************************************************************
 
 #include <exception>
 #include <sstream>
@@ -49,7 +49,9 @@ bool pass::MemoryLayout::run_on_function(shared_ptr<ngraph::Function> function)
                 {
                     auto output = &node->get_outputs().at(oi_pair.output).get_tensor();
                     auto input = &node->get_inputs().at(oi_pair.input).get_tensor();
+                    auto input_node = node->get_inputs().at(oi_pair.input).get_output().get_node();
 
+                    // an input tensor can be reused if this is the last use
                     if (node->liveness_free_list.count(input) != 0 &&
                         node->liveness_new_list.count(output) != 0)
                     {
@@ -65,7 +67,6 @@ bool pass::MemoryLayout::run_on_function(shared_ptr<ngraph::Function> function)
             size_t offset = in_place_outputs.count(tensor)
                                 ? in_place_outputs.at(tensor)->get_pool_offset()
                                 : mm.allocate(tensor->size());
-
             tensor->set_pool_offset(offset);
         }
 
@@ -96,7 +97,10 @@ pass::MemoryManager::MemoryManager(size_t alignment, bool disable_memory_reuse)
     , m_scheme{disable_memory_reuse ? allocation_scheme::NO_REUSE : allocation_scheme::FIRST_FIT}
     , m_max_allocated{0}
 {
-    // assert(m_base_offset % m_alignment == 0);
+    if (m_alignment == 0)
+    {
+        throw invalid_argument("Memory alignment must be > 0");
+    }
     m_node_list.emplace_back(numeric_limits<size_t>::max(), block_state::FREE);
 }
 

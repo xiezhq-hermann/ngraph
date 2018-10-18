@@ -22,6 +22,7 @@ else()
 endif()
 
 include(cmake/Modules/git_tags.cmake)
+
 NGRAPH_GET_VERSION_LABEL()
 
 string(REGEX MATCH "([0-9]+)\.([0-9]+)\.([0-9]+)" NGRAPH_VERSION_SHORT "${NGRAPH_VERSION_LABEL}")
@@ -46,6 +47,10 @@ if (POLICY CMP0042)
 endif()
 
 project (ngraph)
+
+if (UNIX AND NOT APPLE)
+    set(LINUX TRUE)
+endif()
 
 SET(GCC_MIN_VERSION 4.8)
 SET(CLANG_MIN_VERSION 3.8)
@@ -95,10 +100,27 @@ option(NGRAPH_INTERPRETER_ENABLE "Control the building of the INTERPRETER backen
 option(NGRAPH_DISTRIBUTED_ENABLE "Add distributed mode to the CPU backend" FALSE)
 option(NGRAPH_DEBUG_ENABLE "Enable output for NGRAPH_DEBUG statements" FALSE)
 option(NGRAPH_ONNX_IMPORT_ENABLE "Enable ONNX importer" FALSE)
+option(NGRAPH_DEX_ONLY "Build CPU DEX without codegen" FALSE)
+option(NGRAPH_CODE_COVERAGE_ENABLE "Enable code coverage data collection" FALSE)
+
+if (NGRAPH_ONNX_IMPORT_ENABLE)
+    option(NGRAPH_USE_SYSTEM_PROTOBUF "Use system provided Protobuf shared object" FALSE)
+    option(NGRAPH_ONNXIFI_ENABLE "Enable ONNX Interface for Framework Integration" TRUE)
+endif()
 
 #-----------------------------------------------------------------------------------------------
 # Installation logic...
 #-----------------------------------------------------------------------------------------------
+
+if (LINUX)
+    include(GNUInstallDirs)
+    include(cmake/platform.cmake)
+else()
+    set(CMAKE_INSTALL_BINDIR "bin")
+    set(CMAKE_INSTALL_INCLUDEDIR "include")
+    set(CMAKE_INSTALL_DOCDIR "doc")
+    set(CMAKE_INSTALL_LIBDIR "lib")
+endif()
 
 if (DEFINED NGRAPH_INSTALL_PREFIX)
     set(CMAKE_INSTALL_PREFIX ${NGRAPH_INSTALL_PREFIX})
@@ -106,10 +128,10 @@ endif()
 message(STATUS "Installation directory: ${CMAKE_INSTALL_PREFIX}")
 
 # Destinations
-set(NGRAPH_INSTALL_LIB "${CMAKE_INSTALL_PREFIX}/lib")
-set(NGRAPH_INSTALL_INCLUDE "${CMAKE_INSTALL_PREFIX}/include")
-set(NGRAPH_INSTALL_DOC "${CMAKE_INSTALL_PREFIX}/doc")
-set(NGRAPH_INSTALL_BIN "${CMAKE_INSTALL_PREFIX}/bin")
+set(NGRAPH_INSTALL_LIB "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}")
+set(NGRAPH_INSTALL_INCLUDE "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_INCLUDEDIR}")
+set(NGRAPH_INSTALL_DOC "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DOCDIR}")
+set(NGRAPH_INSTALL_BIN "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}")
 set(CMAKE_INSTALL_RPATH "$ORIGIN")
 
 #-----------------------------------------------------------------------------------------------
@@ -124,6 +146,13 @@ endif()
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
+if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    if (DEFINED NGRAPH_USE_CXX_ABI)
+        message( STATUS "nGraph using CXX11 ABI: " ${NGRAPH_USE_CXX_ABI} )
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_GLIBCXX_USE_CXX11_ABI=${NGRAPH_USE_CXX_ABI}")
+    endif()    
+endif()
+
 ngraph_var(NGRAPH_WARNINGS_AS_ERRORS DEFAULT "OFF")
 if (${NGRAPH_WARNINGS_AS_ERRORS})
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
@@ -133,6 +162,10 @@ endif()
 SET(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-g")
 SET(CMAKE_CXX_FLAGS_DEBUG  "-O0 -g")
 
+if (NGRAPH_CODE_COVERAGE_ENABLE)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --coverage")
+endif()
+
 # Enable build target CPU features
 set(NGRAPH_TARGET_ARCH native CACHE STRING "Target CPU architecture to build for. Defaults to the native CPU architecture")
 
@@ -141,6 +174,10 @@ if (NOT "${NGRAPH_TARGET_ARCH}" STREQUAL "native")
 endif()
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=${NGRAPH_TARGET_ARCH}")
+
+if (DEFINED NGRAPH_TUNE_ARCH)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mtune=${NGRAPH_TUNE_ARCH}")
+endif()
 
 # flags required for SDL-3
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2 -fPIE -D_FORTIFY_SOURCE=2")
@@ -169,30 +206,17 @@ if(WIN32)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_CRT_SECURE_NO_WARNINGS")
 endif()
 
-include(unit_test_control)
-set(UNIT_TEST_CONFIG_LIST "" CACHE INTERNAL "")
-
-if (NGRAPH_INTERPRETER_ENABLE)
-    unit_test_control(BACKEND INTERPRETER MANIFEST src/ngraph/runtime/interpreter/unit_test.manifest)
-endif()
-
-# Set true if CPU backend is built by default
 if (NGRAPH_CPU_ENABLE)
-    unit_test_control(BACKEND CPU MANIFEST src/ngraph/runtime/cpu/unit_test.manifest)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DNGRAPH_CPU_ENABLE")
-endif()
-
-if (NGRAPH_INTELGPU_ENABLE)
-    unit_test_control(BACKEND INTELGPU MANIFEST src/ngraph/runtime/intelgpu/unit_test.manifest)
-endif()
-
-if (NGRAPH_GPU_ENABLE)
-    unit_test_control(BACKEND GPU MANIFEST src/ngraph/runtime/gpu/unit_test.manifest)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DNGRAPH_CPU_ENABLE")	
 endif()
 
 if (NOT DEFINED NGRAPH_TBB_ENABLE)
     set(NGRAPH_TBB_ENABLE ${NGRAPH_CPU_ENABLE})
 endif()
+
+add_custom_target(style-check
+    COMMAND ${PROJECT_SOURCE_DIR}/maint/check-code-format.sh
+)
 
 #-----------------------------------------------------------------------------------------------
 # enable or disable output from NGRAPH_DEBUG statements
@@ -209,23 +233,45 @@ set(NGRAPH_BUILD_DIR ${CMAKE_CURRENT_BINARY_DIR}/src/ngraph)
 
 set(EXTERNAL_INSTALL_DIR ${CMAKE_BINARY_DIR}/external)
 
-if (NGRAPH_ONNX_IMPORT_ENABLE)
-    find_package(Protobuf 2.6.1 REQUIRED)
-endif()
-
 if(NOT DEFINED EXTERNAL_PROJECTS_ROOT)
     set(EXTERNAL_PROJECTS_ROOT ${CMAKE_CURRENT_BINARY_DIR})
 endif()
+
+if (NGRAPH_ONNX_IMPORT_ENABLE)
+    if (NOT NGRAPH_USE_SYSTEM_PROTOBUF)
+        include(cmake/external_protobuf.cmake)
+    else()
+        find_package(Protobuf 2.6.1 REQUIRED)
+    endif()
+    if (NGRAPH_ONNXIFI_ENABLE)
+        include(cmake/external_onnx.cmake)
+        if (TARGET ext_protobuf)
+            add_dependencies(ext_onnx ext_protobuf)
+        endif()
+    endif()
+endif()
+
 include(cmake/external_gtest.cmake)
 include(cmake/external_json.cmake)
 include(cmake/external_eigen.cmake)
 include(cmake/external_mkldnn.cmake)
+
 if (NGRAPH_USE_PREBUILT_LLVM OR DEFINED LLVM_TARBALL_URL)
     include(cmake/external_llvm_prebuilt.cmake)
 else()
     include(cmake/external_llvm.cmake)
 endif()
+
 include(cmake/external_tbb.cmake)
+
+if (NGRAPH_HALIDE)
+    message(WARNING "Halide build system integration is currently using an older LLVM release \
+                     and is not expected to work across most build environments. Consider \
+                     disabling it till this message goes away")
+    include(cmake/external_halide.cmake)
+endif()
+
+add_definitions(-DPROJECT_ROOT_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 
 add_subdirectory(src)
 
@@ -237,4 +283,7 @@ else()
     message(STATUS "unit tests disabled")
 endif()
 
-add_subdirectory(doc)
+if (NGRAPH_DOC_BUILD_ENABLE)
+    add_subdirectory(doc)
+endif()
+

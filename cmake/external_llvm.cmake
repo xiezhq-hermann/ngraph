@@ -66,7 +66,7 @@ ExternalProject_Add(
     ext_llvm
     DEPENDS ext_clang ext_openmp
     GIT_REPOSITORY https://github.com/llvm-mirror/llvm.git
-    GIT_TAG 5ae73c34f7eca6c43e71038b06704a8f7abc7f26
+    GIT_TAG da4a2839d80ac52958be0129b871beedfe90136e
     CMAKE_ARGS -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
                 -DCMAKE_ASM_COMPILER=${LLVM_CMAKE_ASM_COMPILER}
                 -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
@@ -175,5 +175,6 @@ else()
 endif()
 
 add_library(libllvm INTERFACE)
+add_dependencies(libllvm ext_llvm)
 target_include_directories(libllvm SYSTEM INTERFACE ${EXTERNAL_PROJECTS_ROOT}/llvm/include)
 target_link_libraries(libllvm INTERFACE ${LLVM_LINK_LIBS})

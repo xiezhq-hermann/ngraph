@@ -1,18 +1,18 @@
-/*******************************************************************************
-* Copyright 2017-2018 Intel Corporation
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*     http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*******************************************************************************/
+//*****************************************************************************
+// Copyright 2017-2018 Intel Corporation
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//*****************************************************************************
 
 #include <memory>
 #include <sstream>
@@ -27,7 +27,7 @@
 #include "ngraph/ngraph.hpp"
 #include "ngraph/pass/assign_placement.hpp"
 #include "ngraph/pass/manager.hpp"
-#include "ngraph/runtime/host_tensor_view.hpp"
+#include "ngraph/runtime/host_tensor.hpp"
 #include "ngraph/util.hpp"
 #include "util/ndarray.hpp"
 #include "util/test_tools.hpp"
@@ -54,7 +54,7 @@ static function<Placement(shared_ptr<Node>)> int_with_cpu_mul_policy = [](shared
 // 1. HybridBackend's main use case is to test device placement and graph partition routines.
 // 2. It also shows how glued-hybrid runtime can be built by combining different runtimes.
 //
-// By default, HybridBackend operates on INTERPRETER (for example, the primary tensor view is
+// By default, HybridBackend operates on INTERPRETER (for example, the tensor view is
 // INTERPRETER tensor view). It falls back to CPU when requested by placement.
 class HybridBackend
 {
@@ -65,15 +65,14 @@ public:
     }
 
     ~HybridBackend() {}
-    shared_ptr<runtime::TensorView> create_tensor(const element::Type& element_type,
-                                                  const Shape& shape)
+    shared_ptr<runtime::Tensor> create_tensor(const element::Type& element_type, const Shape& shape)
     {
         return get_cached_backend(Placement::INTERPRETER)->create_tensor(element_type, shape);
     }
 
     bool compile(const shared_ptr<Function>& func)
     {
-        if (!contains_key(m_function_map, func))
+        if (m_function_map.find(func) == m_function_map.end())
         {
             // Clone function
             FunctionInstance instance;
@@ -100,9 +99,9 @@ public:
         return true;
     }
 
-    bool call(const shared_ptr<Function>& func,
-              const vector<shared_ptr<runtime::TensorView>>& outputs,
-              const vector<shared_ptr<runtime::TensorView>>& inputs)
+    bool call_with_validate(const shared_ptr<Function>& func,
+                            const vector<shared_ptr<runtime::Tensor>>& outputs,
+                            const vector<shared_ptr<runtime::Tensor>>& inputs)
     {
         // Get FunctionInstance
         bool rc = true;
@@ -118,8 +117,8 @@ public:
         }
         FunctionInstance& instance = it->second;
 
-        // Parameter and result node in sub_function maps to one TensorView
-        unordered_map<shared_ptr<Node>, shared_ptr<runtime::TensorView>> map_node_to_tensor_view;
+        // Parameter and result node in sub_function maps to one Tensor
+        unordered_map<shared_ptr<Node>, shared_ptr<runtime::Tensor>> map_node_to_tensor_view;
         for (size_t i = 0; i < inputs.size(); ++i)
         {
             map_node_to_tensor_view[instance.m_function->get_parameters()[i]] = inputs[i];
@@ -137,7 +136,7 @@ public:
             auto backend = get_cached_backend(placement);
 
             // Prepare parameter TensorViews
-            vector<shared_ptr<runtime::TensorView>> parameter_tvs;
+            vector<shared_ptr<runtime::Tensor>> parameter_tvs;
             for (auto parameter_node : sub_function->get_parameters())
             {
                 if (map_node_to_tensor_view.find(parameter_node) != map_node_to_tensor_view.end())
@@ -157,7 +156,7 @@ public:
             }
 
             // Prepare result TensorViews
-            vector<shared_ptr<runtime::TensorView>> result_tvs;
+            vector<shared_ptr<runtime::Tensor>> result_tvs;
             for (auto result_node : sub_function->get_results())
             {
                 if (map_node_to_tensor_view.find(result_node) != map_node_to_tensor_view.end())
@@ -174,7 +173,7 @@ public:
             }
 
             // Call
-            backend->call(sub_function, result_tvs, parameter_tvs);
+            backend->call_with_validate(sub_function, result_tvs, parameter_tvs);
         }
         return rc;
     }
@@ -320,7 +319,7 @@ TEST(graph_partition, hybrid_abc_manual)
 
     auto f0 = make_shared<Function>(ResultVector{R0, R1}, op::ParameterVector{A, B, C});
     int_backend->compile(f0);
-    int_backend->call(f0, {r0, r1}, {a, b, c});
+    int_backend->call_with_validate(f0, {r0, r1}, {a, b, c});
 
     // f1 on CPU
     auto p0 = cpu_backend->create_tensor(element::f32, shape);
@@ -331,7 +330,7 @@ TEST(graph_partition, hybrid_abc_manual)
 
     auto f1 = make_shared<Function>(ResultVector{R2}, op::ParameterVector{P0, P1});
     cpu_backend->compile(f1);
-    cpu_backend->call(f1, {r2}, {p0, p1});
+    cpu_backend->call_with_validate(f1, {r2}, {p0, p1});
 
     // f2 on INT
     auto p2 = int_backend->create_tensor(element::f32, shape);
@@ -340,7 +339,7 @@ TEST(graph_partition, hybrid_abc_manual)
 
     auto f2 = make_shared<Function>(ResultVector{R}, op::ParameterVector{P2});
     int_backend->compile(f2);
-    int_backend->call(f2, {r}, {p2});
+    int_backend->call_with_validate(f2, {r}, {p2});
 
     // Check final result on INT
     EXPECT_EQ(read_vector<float>(r),
@@ -377,16 +376,16 @@ TEST(graph_partition, hybrid_abc)
     auto f = make_shared<Function>(ResultVector{R}, op::ParameterVector{A, B, C});
 
     auto backend = make_shared<HybridBackend>(int_with_cpu_mul_policy);
-    shared_ptr<runtime::TensorView> a = backend->create_tensor(element::f32, shape);
-    shared_ptr<runtime::TensorView> b = backend->create_tensor(element::f32, shape);
-    shared_ptr<runtime::TensorView> c = backend->create_tensor(element::f32, shape);
-    shared_ptr<runtime::TensorView> r = backend->create_tensor(element::f32, shape);
+    shared_ptr<runtime::Tensor> a = backend->create_tensor(element::f32, shape);
+    shared_ptr<runtime::Tensor> b = backend->create_tensor(element::f32, shape);
+    shared_ptr<runtime::Tensor> c = backend->create_tensor(element::f32, shape);
+    shared_ptr<runtime::Tensor> r = backend->create_tensor(element::f32, shape);
 
     copy_data(a, test::NDArray<float, 2>({{1, 2}, {3, 4}}).get_vector());
     copy_data(b, test::NDArray<float, 2>({{5, 6}, {7, 8}}).get_vector());
     copy_data(c, test::NDArray<float, 2>({{9, 10}, {11, 12}}).get_vector());
 
-    backend->call(f, {r}, {a, b, c});
+    backend->call_with_validate(f, {r}, {a, b, c});
     EXPECT_EQ(read_vector<float>(r),
               (test::NDArray<float, 2>({{54, 80}, {110, 144}})).get_vector());
 }
@@ -414,18 +413,18 @@ TEST(graph_partition, hybrid_abcd)
     auto backend = make_shared<HybridBackend>(int_with_cpu_mul_policy);
     backend->compile(f);
 
-    shared_ptr<runtime::TensorView> a = backend->create_tensor(element::f32, shape);
-    shared_ptr<runtime::TensorView> b = backend->create_tensor(element::f32, shape);
-    shared_ptr<runtime::TensorView> c = backend->create_tensor(element::f32, shape);
-    shared_ptr<runtime::TensorView> d = backend->create_tensor(element::f32, shape);
-    shared_ptr<runtime::TensorView> r = backend->create_tensor(element::f32, shape);
+    shared_ptr<runtime::Tensor> a = backend->create_tensor(element::f32, shape);
+    shared_ptr<runtime::Tensor> b = backend->create_tensor(element::f32, shape);
+    shared_ptr<runtime::Tensor> c = backend->create_tensor(element::f32, shape);
+    shared_ptr<runtime::Tensor> d = backend->create_tensor(element::f32, shape);
+    shared_ptr<runtime::Tensor> r = backend->create_tensor(element::f32, shape);
 
     copy_data(a, test::NDArray<float, 2>({{1, 2}, {3, 4}}).get_vector());
     copy_data(b, test::NDArray<float, 2>({{5, 6}, {7, 8}}).get_vector());
     copy_data(c, test::NDArray<float, 2>({{9, 10}, {11, 12}}).get_vector());
     copy_data(d, test::NDArray<float, 2>({{13, 14}, {15, 16}}).get_vector());
 
-    backend->call(f, {r}, {a, b, c, d});
+    backend->call_with_validate(f, {r}, {a, b, c, d});
     EXPECT_EQ(read_vector<float>(r), (test::NDArray<float, 2>({{32, 48}, {68, 92}})).get_vector());
 }
 
@@ -450,16 +449,16 @@ TEST(graph_partition, hybrid_back_and_forth)
     auto backend = make_shared<HybridBackend>(int_with_cpu_mul_policy);
     backend->compile(f);
 
-    shared_ptr<runtime::TensorView> a = backend->create_tensor(element::f32, shape);
-    shared_ptr<runtime::TensorView> b = backend->create_tensor(element::f32, shape);
-    shared_ptr<runtime::TensorView> c = backend->create_tensor(element::f32, shape);
-    shared_ptr<runtime::TensorView> r = backend->create_tensor(element::f32, shape);
+    shared_ptr<runtime::Tensor> a = backend->create_tensor(element::f32, shape);
+    shared_ptr<runtime::Tensor> b = backend->create_tensor(element::f32, shape);
+    shared_ptr<runtime::Tensor> c = backend->create_tensor(element::f32, shape);
+    shared_ptr<runtime::Tensor> r = backend->create_tensor(element::f32, shape);
 
     copy_data(a, test::NDArray<float, 2>({{1, 2}, {3, 4}}).get_vector());
     copy_data(b, test::NDArray<float, 2>({{5, 6}, {7, 8}}).get_vector());
     copy_data(c, test::NDArray<float, 2>({{9, 10}, {11, 12}}).get_vector());
 
-    backend->call(f, {r}, {a, b, c});
+    backend->call_with_validate(f, {r}, {a, b, c});
     EXPECT_EQ(read_vector<float>(r),
               (test::NDArray<float, 2>({{90, 180}, {308, 480}})).get_vector());
 }
@@ -487,16 +486,16 @@ TEST(graph_partition, hybrid_multi_middle_nodes)
     auto backend = make_shared<HybridBackend>(int_with_cpu_mul_policy);
     backend->compile(f);
 
-    shared_ptr<runtime::TensorView> a = backend->create_tensor(element::f32, shape);
-    shared_ptr<runtime::TensorView> b = backend->create_tensor(element::f32, shape);
-    shared_ptr<runtime::TensorView> c = backend->create_tensor(element::f32, shape);
-    shared_ptr<runtime::TensorView> r = backend->create_tensor(element::f32, shape);
+    shared_ptr<runtime::Tensor> a = backend->create_tensor(element::f32, shape);
+    shared_ptr<runtime::Tensor> b = backend->create_tensor(element::f32, shape);
+    shared_ptr<runtime::Tensor> c = backend->create_tensor(element::f32, shape);
+    shared_ptr<runtime::Tensor> r = backend->create_tensor(element::f32, shape);
 
     copy_data(a, test::NDArray<float, 2>({{1, 2}, {3, 4}}).get_vector());
     copy_data(b, test::NDArray<float, 2>({{5, 6}, {7, 8}}).get_vector());
     copy_data(c, test::NDArray<float, 2>({{9, 10}, {11, 12}}).get_vector());
 
-    backend->call(f, {r}, {a, b, c});
+    backend->call_with_validate(f, {r}, {a, b, c});
     EXPECT_EQ(read_vector<float>(r),
               (test::NDArray<float, 2>({{210, 288}, {378, 480}})).get_vector());
 }
@@ -515,14 +514,14 @@ TEST(graph_partition, hybrid_no_split)
     auto backend = make_shared<HybridBackend>(int_with_cpu_mul_policy);
     backend->compile(f);
 
-    shared_ptr<runtime::TensorView> a = backend->create_tensor(element::f32, shape);
-    shared_ptr<runtime::TensorView> b = backend->create_tensor(element::f32, shape);
-    shared_ptr<runtime::TensorView> c = backend->create_tensor(element::f32, shape);
+    shared_ptr<runtime::Tensor> a = backend->create_tensor(element::f32, shape);
+    shared_ptr<runtime::Tensor> b = backend->create_tensor(element::f32, shape);
+    shared_ptr<runtime::Tensor> c = backend->create_tensor(element::f32, shape);
 
     copy_data(a, test::NDArray<float, 2>({{1, 2}, {3, 4}}).get_vector());
     copy_data(b, test::NDArray<float, 2>({{5, 6}, {7, 8}}).get_vector());
 
-    backend->call(f, {c}, {a, b});
+    backend->call_with_validate(f, {c}, {a, b});
     EXPECT_EQ(read_vector<float>(c), (test::NDArray<float, 2>({{6, 8}, {10, 12}})).get_vector());
 }
 
