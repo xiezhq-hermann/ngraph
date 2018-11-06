@@ -34,26 +34,64 @@ using namespace ngraph;
 
 static string s_manifest = "${MANIFEST}";
 
-NGRAPH_TEST(${BACKEND_NAME}, add)
+template <typename OP, typename T>
+vector<T> run_test(vector<T> arg0, vector<T> arg1)
 {
-    Shape shape{2, 2};
-    auto A = make_shared<op::Parameter>(element::f32, shape);
-    auto B = make_shared<op::Parameter>(element::f32, shape);
-    auto f = make_shared<Function>(make_shared<op::Add>(A, B), op::ParameterVector{A, B});
+    Shape shape{4};
+    auto A = make_shared<op::Parameter>(element::from<T>(), shape);
+    auto B = make_shared<op::Parameter>(element::from<T>(), shape);
+    auto f = make_shared<Function>(make_shared<OP>(A, B), op::ParameterVector{A, B});
 
     auto backend = runtime::Backend::create("${BACKEND_NAME}");
 
     // Create some tensors for input/output
-    shared_ptr<runtime::Tensor> a = backend->create_tensor(element::f32, shape);
-    shared_ptr<runtime::Tensor> b = backend->create_tensor(element::f32, shape);
-    shared_ptr<runtime::Tensor> result = backend->create_tensor(element::f32, shape);
+    shared_ptr<runtime::Tensor> a = backend->create_tensor(element::from<T>(), shape);
+    shared_ptr<runtime::Tensor> b = backend->create_tensor(element::from<T>(), shape);
+    shared_ptr<runtime::Tensor> result = backend->create_tensor(element::from<T>(), shape);
 
-    copy_data(a, test::NDArray<float, 2>({{1, 2}, {3, 4}}).get_vector());
-    copy_data(b, test::NDArray<float, 2>({{5, 6}, {7, 8}}).get_vector());
+    copy_data(a, arg0);
+    copy_data(b, arg1);
 
     backend->call_with_validate(f, {result}, {a, b});
-    EXPECT_EQ(read_vector<float>(result),
-              (test::NDArray<float, 2>({{6, 8}, {10, 12}})).get_vector());
+    vector<T> result_vector(shape_size(shape));
+    result->read(result_vector.data(), 0, result_vector.size() * sizeof(T));
+    return result_vector;
+}
+
+// #define MULTI_TEST(op, arg0, arg1) \
+// NGRAPH_TEST(${BACKEND_NAME}, #op) \
+// {
+// }
+
+static vector<int> arg0 = {100, 200, 300, 400};
+static vector<int> arg1 = {5, 6, 7, 8};
+// MULTI_TEST(Add, arg0, arg1)
+
+template <typename T>
+vector<T> generate_expected(vector<T> a0, vector<T> a1, function<T(T)> f)
+{
+}
+
+template <typename T>
+vector<T> init(vector<int> in)
+{
+    vector<T> out;
+    for (int x : in)
+    {
+        out.push_back(static_cast<T>(x));
+    }
+    return out;
+}
+
+NGRAPH_TEST(${BACKEND_NAME}, add)
+{
+    auto a_data = init<float>(arg0);
+    auto b_data = init<float>(arg1);
+
+    auto result = run_test<ngraph::op::Add, float>(a_data, b_data);
+    auto expected = generate_expected<ngraph::op::Add>(arg0, arg1);
+    vector<float> expected{105, 206, 307, 408};
+    EXPECT_EQ(result, expected);
 }
 
 NGRAPH_TEST(${BACKEND_NAME}, add_overload)
