@@ -16,12 +16,25 @@
 
 #include <cstdint>
 #include <memory>
+#include <vector>
 
-#include "ngraph/node_vector.hpp"
-#include "ngraph/op/batch_norm.hpp"
-
+#include "ngraph/axis_vector.hpp"
 #include "ngraph/frontend/onnx_import/exceptions.hpp"
 #include "ngraph/frontend/onnx_import/op/batch_norm.hpp"
+#include "ngraph/frontend/onnx_import/utils/broadcasting.hpp"
+#include "ngraph/frontend/onnx_import/utils/reshape.hpp"
+#include "ngraph/frontend/onnx_import/utils/variadic.hpp"
+#include "ngraph/op/add.hpp"
+#include "ngraph/op/batch_norm.hpp"
+#include "ngraph/op/constant.hpp"
+#include "ngraph/op/divide.hpp"
+#include "ngraph/op/multiply.hpp"
+#include "ngraph/op/power.hpp"
+#include "ngraph/op/reshape.hpp"
+#include "ngraph/op/sqrt.hpp"
+#include "ngraph/op/subtract.hpp"
+#include "ngraph/op/sum.hpp"
+#include "ngraph/shape.hpp"
 
 namespace ngraph
 {
@@ -34,7 +47,8 @@ namespace ngraph
                 NodeVector batch_norm(const Node& node)
                 {
                     NodeVector inputs{node.get_ng_inputs()};
-                    auto x = inputs.at(0);
+                    auto data = inputs.at(0);
+                    const Shape& data_shape = data->get_shape();
                     auto scale = inputs.at(1);
                     auto bias = inputs.at(2);
                     std::shared_ptr<ngraph::Node> mean{nullptr};
@@ -47,18 +61,46 @@ namespace ngraph
                     // TODO: Implement learning mode support
                     // float momentum{node.get_attribute_value<float>("momentum", 0.9f)};
                     ASSERT_IS_SUPPORTED(node, is_test) << "only 'is_test' mode is supported.";
-                    ASSERT_IS_SUPPORTED(node, spatial) << "only 'spatial' mode is supported.";
 
-                    if (inputs.size() >= 5)
+                    if (spatial == 0)
                     {
-                        mean = inputs.at(3);
-                        var = inputs.at(4);
-                        return {std::make_shared<ngraph::op::BatchNormInference>(
-                            epsilon, scale, bias, x, mean, var)};
-                    }
+                        auto mean =
+                            legacy_style_broadcast_for_binary_operation(data, inputs.at(3), 1)
+                                .at(1);
+                        auto variance =
+                            legacy_style_broadcast_for_binary_operation(data, inputs.at(4), 1)
+                                .at(1);
 
-                    return {
-                        std::make_shared<ngraph::op::BatchNormTraining>(epsilon, scale, bias, x)};
+                        bias = legacy_style_broadcast_for_binary_operation(data, bias, 1).at(1);
+                        scale = legacy_style_broadcast_for_binary_operation(data, scale, 1).at(1);
+
+                        std::shared_ptr<ngraph::Node> epsilon_node = ngraph::op::Constant::create(
+                            data->get_element_type(), Shape{}, std::vector<double>{epsilon});
+                        epsilon_node =
+                            numpy_style_broadcast_for_binary_operation(data, epsilon_node).at(1);
+
+                        std::shared_ptr<ngraph::Node> one_node = ngraph::op::Constant::create(
+                            data->get_element_type(), Shape{}, std::vector<double>{1});
+                        one_node = numpy_style_broadcast_for_binary_operation(data, one_node).at(1);
+
+                        return {(scale * ((data - mean) *
+                                          (one_node / (std::make_shared<ngraph::op::Sqrt>(
+                                                          variance + epsilon_node)))) +
+                                 bias)};
+                    }
+                    else
+                    {
+                        if (inputs.size() >= 5)
+                        {
+                            mean = inputs.at(3);
+                            var = inputs.at(4);
+                            return {std::make_shared<ngraph::op::BatchNormInference>(
+                                epsilon, scale, bias, data, mean, var)};
+                        }
+
+                        return {std::make_shared<ngraph::op::BatchNormTraining>(
+                            epsilon, scale, bias, data)};
+                    }
                 }
 
             } // namespace set_1
