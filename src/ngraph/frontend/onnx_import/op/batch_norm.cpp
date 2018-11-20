@@ -22,6 +22,7 @@
 #include "ngraph/frontend/onnx_import/exceptions.hpp"
 #include "ngraph/frontend/onnx_import/op/batch_norm.hpp"
 #include "ngraph/frontend/onnx_import/utils/broadcasting.hpp"
+#include "ngraph/frontend/onnx_import/utils/common.hpp"
 #include "ngraph/frontend/onnx_import/utils/reshape.hpp"
 #include "ngraph/frontend/onnx_import/utils/variadic.hpp"
 #include "ngraph/op/add.hpp"
@@ -74,15 +75,11 @@ namespace ngraph
                         bias = legacy_style_broadcast_for_binary_operation(data, bias, 1).at(1);
                         scale = legacy_style_broadcast_for_binary_operation(data, scale, 1).at(1);
 
-                        std::shared_ptr<ngraph::Node> epsilon_node = ngraph::op::Constant::create(
-                            data->get_element_type(),
-                            data_shape,
-                            std::vector<double>(shape_size(data_shape), epsilon));
+                        std::shared_ptr<ngraph::Node> epsilon_node = common::make_constant_node(
+                            data->get_element_type(), data_shape, std::vector<double>{epsilon});
 
-                        std::shared_ptr<ngraph::Node> one_node = ngraph::op::Constant::create(
-                            data->get_element_type(),
-                            data_shape,
-                            std::vector<double>(shape_size(data_shape), 1));
+                        std::shared_ptr<ngraph::Node> one_node = common::make_constant_node(
+                            data->get_element_type(), data_shape, std::vector<double>{1});
 
                         return {(scale * ((data - mean) *
                                           (one_node / (std::make_shared<ngraph::op::Sqrt>(
