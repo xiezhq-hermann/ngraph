@@ -76,10 +76,10 @@ namespace ngraph
                         scale = legacy_style_broadcast_for_binary_operation(data, scale, 1).at(1);
 
                         std::shared_ptr<ngraph::Node> epsilon_node = common::make_constant_node(
-                            data->get_element_type(), data_shape, std::vector<double>{epsilon});
+                            data->get_element_type(), data_shape, epsilon);
 
-                        std::shared_ptr<ngraph::Node> one_node = common::make_constant_node(
-                            data->get_element_type(), data_shape, std::vector<double>{1});
+                        std::shared_ptr<ngraph::Node> one_node =
+                            common::make_constant_node(data->get_element_type(), data_shape, 1);
 
                         return {(scale * ((data - mean) *
                                           (one_node / (std::make_shared<ngraph::op::Sqrt>(
