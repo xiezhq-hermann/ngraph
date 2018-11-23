@@ -122,7 +122,7 @@ namespace ngraph
                                                              const T& data)
             {
                 return ngraph::op::Constant::create(
-                    type, shape, std::vector<double>(shape_size(shape), data));
+                    type, shape, std::vector<T>(shape_size(shape), data));
             }
 
             /// \brief      Makes a Constant Ngraph node.
