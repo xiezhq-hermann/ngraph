@@ -78,8 +78,8 @@ namespace ngraph
                         std::shared_ptr<ngraph::Node> epsilon_node = common::make_constant_node(
                             data->get_element_type(), data_shape, epsilon);
 
-                        std::shared_ptr<ngraph::Node> one_node =
-                            common::make_constant_node(data->get_element_type(), data_shape, 1);
+                        std::shared_ptr<ngraph::Node> one_node = common::make_constant_node(
+                            data->get_element_type(), data_shape, static_cast<double>(1));
 
                         return {(scale * ((data - mean) *
                                           (one_node / (std::make_shared<ngraph::op::Sqrt>(
